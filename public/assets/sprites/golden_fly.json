@@ -1,0 +1,203 @@
+{
+  "frames": {
+    "frame_000": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "sourceSize": {
+        "w": 434,
+        "h": 532
+      },
+      "duration": 111
+    },
+    "frame_001": {
+      "frame": {
+        "x": 434,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "sourceSize": {
+        "w": 434,
+        "h": 532
+      },
+      "duration": 111
+    },
+    "frame_002": {
+      "frame": {
+        "x": 868,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "sourceSize": {
+        "w": 434,
+        "h": 532
+      },
+      "duration": 111
+    },
+    "frame_003": {
+      "frame": {
+        "x": 0,
+        "y": 532,
+        "w": 434,
+        "h": 532
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "sourceSize": {
+        "w": 434,
+        "h": 532
+      },
+      "duration": 111
+    },
+    "frame_004": {
+      "frame": {
+        "x": 434,
+        "y": 532,
+        "w": 434,
+        "h": 532
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "sourceSize": {
+        "w": 434,
+        "h": 532
+      },
+      "duration": 111
+    },
+    "frame_005": {
+      "frame": {
+        "x": 868,
+        "y": 532,
+        "w": 434,
+        "h": 532
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "sourceSize": {
+        "w": 434,
+        "h": 532
+      },
+      "duration": 111
+    },
+    "frame_006": {
+      "frame": {
+        "x": 0,
+        "y": 1064,
+        "w": 434,
+        "h": 532
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "sourceSize": {
+        "w": 434,
+        "h": 532
+      },
+      "duration": 111
+    },
+    "frame_007": {
+      "frame": {
+        "x": 434,
+        "y": 1064,
+        "w": 434,
+        "h": 532
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "sourceSize": {
+        "w": 434,
+        "h": 532
+      },
+      "duration": 111
+    },
+    "frame_008": {
+      "frame": {
+        "x": 868,
+        "y": 1064,
+        "w": 434,
+        "h": 532
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 434,
+        "h": 532
+      },
+      "sourceSize": {
+        "w": 434,
+        "h": 532
+      },
+      "duration": 111
+    }
+  },
+  "meta": {
+    "app": "https://ludo.ai",
+    "image": "A-cute-cartoon-mallard-duck-viewed-from-a-three-qu-max-px-frames-9-rows-3-cols-3.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1302,
+      "h": 1596
+    },
+    "scale": "1"
+  }
+}

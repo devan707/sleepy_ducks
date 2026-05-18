@@ -1,0 +1,203 @@
+{
+  "frames": {
+    "frame_000": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "sourceSize": {
+        "w": 640,
+        "h": 640
+      },
+      "duration": 120
+    },
+    "frame_001": {
+      "frame": {
+        "x": 640,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "sourceSize": {
+        "w": 640,
+        "h": 640
+      },
+      "duration": 120
+    },
+    "frame_002": {
+      "frame": {
+        "x": 1280,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "sourceSize": {
+        "w": 640,
+        "h": 640
+      },
+      "duration": 120
+    },
+    "frame_003": {
+      "frame": {
+        "x": 0,
+        "y": 640,
+        "w": 640,
+        "h": 640
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "sourceSize": {
+        "w": 640,
+        "h": 640
+      },
+      "duration": 120
+    },
+    "frame_004": {
+      "frame": {
+        "x": 640,
+        "y": 640,
+        "w": 640,
+        "h": 640
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "sourceSize": {
+        "w": 640,
+        "h": 640
+      },
+      "duration": 120
+    },
+    "frame_005": {
+      "frame": {
+        "x": 1280,
+        "y": 640,
+        "w": 640,
+        "h": 640
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "sourceSize": {
+        "w": 640,
+        "h": 640
+      },
+      "duration": 120
+    },
+    "frame_006": {
+      "frame": {
+        "x": 0,
+        "y": 1280,
+        "w": 640,
+        "h": 640
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "sourceSize": {
+        "w": 640,
+        "h": 640
+      },
+      "duration": 120
+    },
+    "frame_007": {
+      "frame": {
+        "x": 640,
+        "y": 1280,
+        "w": 640,
+        "h": 640
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "sourceSize": {
+        "w": 640,
+        "h": 640
+      },
+      "duration": 120
+    },
+    "frame_008": {
+      "frame": {
+        "x": 1280,
+        "y": 1280,
+        "w": 640,
+        "h": 640
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 640,
+        "h": 640
+      },
+      "sourceSize": {
+        "w": 640,
+        "h": 640
+      },
+      "duration": 120
+    }
+  },
+  "meta": {
+    "app": "https://ludo.ai",
+    "image": "Front-facing-red-heart-balloon-sprite-hand-drawn-s-max-px-frames-9-rows-3-cols-3.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 1920,
+      "h": 1920
+    },
+    "scale": "1"
+  }
+}

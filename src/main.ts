@@ -1,0 +1,56 @@
+import Phaser from 'phaser';
+import { MusicManager } from './audio/MusicManager';
+import { GAME_HEIGHT, GAME_WIDTH } from './config/gameConfig';
+import { AssetLoaderScene } from './scenes/AssetLoaderScene';
+import { BootScene } from './scenes/BootScene';
+import { GameOverScene } from './scenes/GameOverScene';
+import { GameScene } from './scenes/GameScene';
+import { MenuScene } from './scenes/MenuScene';
+import { RulesScene } from './scenes/RulesScene';
+import { PreloadScene } from './scenes/PreloadScene';
+
+const config: Phaser.Types.Core.GameConfig = {
+  type: Phaser.AUTO,
+  parent: 'game-container',
+  width: GAME_WIDTH,
+  height: GAME_HEIGHT,
+  backgroundColor: '#b8dce8',
+  render: {
+    powerPreference: 'high-performance',
+    antialias: true,
+    roundPixels: true,
+  },
+  fps: {
+    target: 60,
+    smoothStep: true,
+  },
+  scale: {
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
+  input: {
+    activePointers: 2,
+  },
+  audio: {
+    disableWebAudio: false,
+  },
+  scene: [
+    BootScene,
+    PreloadScene,
+    AssetLoaderScene,
+    MenuScene,
+    RulesScene,
+    GameScene,
+    GameOverScene,
+  ],
+};
+
+MusicManager.startEarly();
+
+const unlockAudioOnGesture = (): void => {
+  MusicManager.getInstance().tryUnlock();
+};
+document.addEventListener('pointerdown', unlockAudioOnGesture, { once: true, passive: true });
+document.addEventListener('keydown', unlockAudioOnGesture, { once: true });
+
+new Phaser.Game(config);

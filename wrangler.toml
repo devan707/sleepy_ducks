@@ -1,0 +1,7 @@
+name = "sleepy-ducks"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "dist"
+
+# Required when Cloudflare Git uses `npx wrangler deploy` (Workers static assets).
+[assets]
+directory = "./dist"

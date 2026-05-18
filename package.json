@@ -1,0 +1,39 @@
+{
+  "name": "sleepy-ducks",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android",
+    "assets:placeholders": "node scripts/generate-placeholders.mjs",
+    "assets:water-mask": "node scripts/generate-water-mask.mjs",
+    "assets:water-tile": "node scripts/generate-waterfall-tile.mjs",
+    "assets:web-icons": "node scripts/generate-web-icons.mjs"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "sharp": "^0.33.5",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0",
+    "phaser": "^3.87.0"
+  },
+  "capacitor": {
+    "platforms": [
+      "ios",
+      "android"
+    ]
+  }
+}
