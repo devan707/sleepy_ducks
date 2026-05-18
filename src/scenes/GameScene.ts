@@ -2,9 +2,11 @@ import Phaser from 'phaser';
 import { AssetManager } from '../assets/AssetManager';
 import { loadGameAssets } from '../assets/GameAssetLoader';
 import { registerDuckAnimations } from '../assets/DuckAnimations';
+import { ASSET_KEYS } from '../config/assets';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
-import { SoundToggle } from '../ui/SoundToggle';
+import { SettingsButton } from '../ui/SettingsButton';
+import { SettingsDrawer } from '../ui/SettingsDrawer';
 import {
   BALLOON,
   COLORS,
@@ -59,7 +61,10 @@ export class GameScene extends Phaser.Scene {
   private spawner!: SpawnController;
   private soundManager!: SoundManager;
   private musicManager!: MusicManager;
-  private soundToggle!: SoundToggle;
+  private settingsDrawer!: SettingsDrawer;
+  private settingsButton!: SettingsButton;
+  private settingsPaused = false;
+  private leavingViaSettings = false;
   private stage!: WaterfallStage;
   private moonflowerController!: MoonflowerController;
   private ducks!: Phaser.GameObjects.Group;
@@ -128,7 +133,25 @@ export class GameScene extends Phaser.Scene {
     this.soundManager = SoundManager.forScene(this);
     this.musicManager = MusicManager.getInstance();
     this.musicManager.playGameplay();
-    this.soundToggle = new SoundToggle(this, this.soundManager);
+    this.settingsDrawer = new SettingsDrawer(this, {
+      depth: STAGE.hudDepth + 20,
+      musicManager: this.musicManager,
+      soundManager: this.soundManager,
+      musicContext: 'gameplay',
+      mode: 'gameplay',
+      onOpen: () => this.applySettingsPause(),
+      onClose: () => {
+        if (!this.leavingViaSettings) this.applySettingsResume();
+      },
+      onQuitToMenu: () => this.quitToMenu(),
+    });
+    this.settingsButton = new SettingsButton(this, {
+      drawer: this.settingsDrawer,
+      depth: STAGE.hudDepth + 3,
+    });
+    if (this.textures.exists(ASSET_KEYS.uiGear)) {
+      this.settingsButton.refreshGearGraphic();
+    }
     this.difficulty = new DifficultyManager();
     this.hud = new HUD(this);
     this.hud.setScore(0);
@@ -202,6 +225,32 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  private applySettingsPause(): void {
+    if (this.settingsPaused || this.isGameOver || this.calibrationMode) return;
+    this.settingsPaused = true;
+    this.spawner.stop();
+    this.moonflowerController?.setEnabled(false);
+  }
+
+  private applySettingsResume(): void {
+    if (!this.settingsPaused) return;
+    this.settingsPaused = false;
+    if (!this.isGameOver && !this.calibrationMode) {
+      this.moonflowerController?.setEnabled(true);
+      this.spawner.start();
+    }
+  }
+
+  private quitToMenu(): void {
+    this.leavingViaSettings = true;
+    this.settingsDrawer.close();
+    this.cameras.main.fadeOut(280, 0, 0, 0);
+    this.time.delayedCall(280, () => {
+      this.leavingViaSettings = false;
+      this.scene.start(SCENE_KEYS.menu);
+    });
+  }
+
   private applyCalibrationPause(): void {
     if (this.calibrationMode) return;
     this.calibrationMode = true;
@@ -234,8 +283,9 @@ export class GameScene extends Phaser.Scene {
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
     if (pointer.button !== 0) return;
-    if (SoundToggle.consumeSceneSuppress()) return;
+    if (SettingsButton.consumeSceneSuppress()) return;
     if (MoonflowerController.consumeTapSuppress()) return;
+    if (this.settingsDrawer?.isOpen()) return;
 
     this.pointerDownX = pointer.worldX;
     this.pointerDownY = pointer.worldY;
@@ -247,8 +297,9 @@ export class GameScene extends Phaser.Scene {
 
   private onPointerUp(pointer: Phaser.Input.Pointer): void {
     if (pointer.button !== 0) return;
-    if (SoundToggle.consumeSceneSuppress()) return;
+    if (SettingsButton.consumeSceneSuppress()) return;
     if (MoonflowerController.consumeTapSuppress()) return;
+    if (this.settingsDrawer?.isOpen()) return;
 
     if (this.suppressTapOnPointerUp) {
       this.suppressTapOnPointerUp = false;
@@ -266,7 +317,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private tryPointerTap(worldX: number, worldY: number): boolean {
-    if (this.calibrationMode || this.isGameOver) return false;
+    if (this.calibrationMode || this.isGameOver || this.settingsPaused) return false;
     if (this.moonflowerController?.isBlockingInput()) return true;
 
     if (this.moonflowerController?.tryTap(worldX, worldY)) {
@@ -404,7 +455,7 @@ export class GameScene extends Phaser.Scene {
 
     this.stage.update(_time, simDelta, this.difficulty.elapsedSeconds);
 
-    if (this.calibrationMode || watchPaused) return;
+    if (this.calibrationMode || watchPaused || this.settingsPaused) return;
 
     tickSurvivalTime(this.stats, delta);
     this.hud.setElapsedTime(this.stats.timeSurvivedMs);
@@ -578,7 +629,8 @@ export class GameScene extends Phaser.Scene {
     resetWatchTime();
     this.moonflowerController?.destroy();
     this.spawner?.destroy();
-    this.soundToggle?.destroy();
+    this.settingsDrawer?.destroy();
+    this.settingsButton?.destroy();
     this.soundManager?.detach();
     this.hud?.destroy();
     this.stage?.destroy();

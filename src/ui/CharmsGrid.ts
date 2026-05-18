@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   CHARM_BOX_SLOT_LAYOUT,
+  CHARMS_BARE_ROW_LAYOUT,
   CHARM_SLOT_COUNT,
   CHARMS,
   type CharmId,
@@ -16,19 +17,23 @@ export type CharmsGridOptions = {
   /** Highlight a slot index (e.g. during collection reveal). */
   highlightSlot?: number;
   showLocked?: boolean;
+  /** Horizontal row without charm box art (settings drawer). */
+  bareRow?: boolean;
 };
 
 export class CharmsGrid extends Phaser.GameObjects.Container {
   private slotIcons: (Phaser.GameObjects.Image | null)[] = [];
   private slotRings: Phaser.GameObjects.Graphics[] = [];
   private readonly layoutScale: number;
+  private readonly slotLayout: typeof CHARM_BOX_SLOT_LAYOUT | typeof CHARMS_BARE_ROW_LAYOUT;
 
   constructor(scene: Phaser.Scene, opts: CharmsGridOptions) {
     super(scene, opts.centerX, opts.centerY);
     const scale = opts.scale ?? 1;
     this.layoutScale = scale;
+    this.slotLayout = opts.bareRow ? CHARMS_BARE_ROW_LAYOUT : CHARM_BOX_SLOT_LAYOUT;
     const state = loadCharms();
-    const { boxWidth, boxHeight, slots } = CHARM_BOX_SLOT_LAYOUT;
+    const { boxWidth, boxHeight, slots } = this.slotLayout;
 
     for (let i = 0; i < CHARM_SLOT_COUNT; i++) {
       const slot = slots[i];
@@ -65,7 +70,7 @@ export class CharmsGrid extends Phaser.GameObjects.Container {
   }
 
   getSlotWorldPosition(slotIndex: number): { x: number; y: number } {
-    const { boxWidth, boxHeight, slots } = CHARM_BOX_SLOT_LAYOUT;
+    const { boxWidth, boxHeight, slots } = this.slotLayout;
     const slot = slots[slotIndex];
     if (!slot) return { x: this.x, y: this.y };
     const matrix = this.getWorldTransformMatrix();
@@ -78,7 +83,7 @@ export class CharmsGrid extends Phaser.GameObjects.Container {
     const existing = this.slotIcons[slotIndex];
     existing?.destroy();
 
-    const { boxWidth, boxHeight, slots } = CHARM_BOX_SLOT_LAYOUT;
+    const { boxWidth, boxHeight, slots } = this.slotLayout;
     const slot = slots[slotIndex];
     if (!slot) return null;
 

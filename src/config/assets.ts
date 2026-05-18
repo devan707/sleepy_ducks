@@ -28,6 +28,7 @@ export const ASSET_KEYS = {
   uiPlay: 'ui-play',
   uiRetry: 'ui-retry',
   uiGear: 'ui-gear',
+  uiLoading: 'ui-loading',
   charmBox: 'ui-charm-box',
   atlasMoonflowerSprout: 'atlas-moonflower-sprout',
   atlasMoonflowerBloom: 'atlas-moonflower-bloom',

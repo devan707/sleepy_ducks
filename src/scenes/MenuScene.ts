@@ -105,22 +105,35 @@ export class MenuScene extends Phaser.Scene {
     const high = getHighScore();
     const longestMs = getLongestTimeMs();
     const scoreY = taglineY + 44;
-
-    this.add
-      .text(cx, scoreY, 'BEST SCORE', labelTextStyle())
-      .setOrigin(0.5, 0)
-      .setDepth(DEPTH.ui)
-      .setScrollFactor(0);
-
-    this.add
-      .text(cx, scoreY + 20, String(high), scoreTextStyle({ fontSize: '36px' }))
-      .setOrigin(0.5, 0)
-      .setDepth(DEPTH.ui)
-      .setScrollFactor(0);
-
     const timeY = scoreY + 68;
+    const statsPanelWidth = 272;
+    const statsPanelTop = scoreY - 12;
+    const statsPanelHeight = timeY + 20 + 34 - statsPanelTop;
+
+    const statsPanel = this.add.graphics().setDepth(DEPTH.ui - 1).setScrollFactor(0);
+    statsPanel.fillStyle(0x1a2830, 0.42);
+    statsPanel.fillRoundedRect(
+      cx - statsPanelWidth / 2,
+      statsPanelTop,
+      statsPanelWidth,
+      statsPanelHeight,
+      16,
+    );
+
     this.add
-      .text(cx, timeY, 'BEST TIME', labelTextStyle())
+      .text(cx, scoreY, 'BEST SCORE', labelTextStyle({ strokeThickness: 0 }))
+      .setOrigin(0.5, 0)
+      .setDepth(DEPTH.ui)
+      .setScrollFactor(0);
+
+    this.add
+      .text(cx, scoreY + 20, String(high), scoreTextStyle({ fontSize: '36px', strokeThickness: 0 }))
+      .setOrigin(0.5, 0)
+      .setDepth(DEPTH.ui)
+      .setScrollFactor(0);
+
+    this.add
+      .text(cx, timeY, 'BEST TIME', labelTextStyle({ strokeThickness: 0 }))
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);
@@ -130,7 +143,7 @@ export class MenuScene extends Phaser.Scene {
         cx,
         timeY + 20,
         longestMs > 0 ? formatSurvivalTime(longestMs) : '—',
-        scoreTextStyle({ fontSize: '28px' }),
+        scoreTextStyle({ fontSize: '28px', strokeThickness: 0 }),
       )
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)

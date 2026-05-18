@@ -1,14 +1,20 @@
 import Phaser from 'phaser';
 import { ASSET_KEYS } from '../config/assets';
-import { GAME_WIDTH } from '../config/gameConfig';
+import { GAME_HEIGHT, GAME_WIDTH, HUD_LAYOUT } from '../config/gameConfig';
 import { createCartoonGearIcon } from './CartoonGearIcon';
 import { SettingsDrawer } from './SettingsDrawer';
 
 const RADIUS = 22;
-const INSET_TOP = 12;
 const INSET_RIGHT = 12;
 /** Display size for wood gear.png art. */
 const GEAR_DISPLAY = 42;
+
+export function getDefaultSettingsButtonPosition(): { x: number; y: number } {
+  return {
+    x: GAME_WIDTH - INSET_RIGHT - RADIUS,
+    y: GAME_HEIGHT - HUD_LAYOUT.marginBottom - RADIUS,
+  };
+}
 
 export type SettingsButtonOptions = {
   drawer: SettingsDrawer;
@@ -36,8 +42,9 @@ export class SettingsButton {
     this.scene = scene;
     this.drawer = opts.drawer;
 
-    const x = opts.x ?? GAME_WIDTH - INSET_RIGHT - RADIUS;
-    const y = opts.y ?? INSET_TOP + RADIUS;
+    const defaultPos = getDefaultSettingsButtonPosition();
+    const x = opts.x ?? defaultPos.x;
+    const y = opts.y ?? defaultPos.y;
 
     const hit = scene.add
       .circle(0, 0, RADIUS + 6, 0xffffff, 0)

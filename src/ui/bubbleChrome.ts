@@ -144,14 +144,16 @@ export type BubbleVolumeSliderOptions = {
   label: string;
   initial01: number;
   onChange: (volume01: number) => void;
+  /** Called when the sound-off toggle changes. */
+  onMuteChange?: (muted: boolean) => void;
 };
 
-/** Horizontal volume slider (0–1) with bubble styling. */
+/** Horizontal volume slider (0–1) with bubble styling and sound-off toggle. */
 export function createBubbleVolumeSlider(
   scene: Phaser.Scene,
   opts: BubbleVolumeSliderOptions,
 ): Phaser.GameObjects.Container {
-  const { x, y, width, height, label, initial01, onChange } = opts;
+  const { x, y, width, height, label, initial01, onChange, onMuteChange } = opts;
   const g = scene.add.graphics();
   drawBubbleRect(g, 0, 0, width, height, { fill: 0x2f6f88, radius: 16 });
 
@@ -169,10 +171,32 @@ export function createBubbleVolumeSlider(
   const knob = scene.add.graphics();
 
   const pctText = scene.add
-    .text(width - trackPad, trackY - 18, '', captionTextStyle({ fontSize: '11px' }))
+    .text(width - trackPad - 58, 14, '', captionTextStyle({ fontSize: '11px' }))
     .setOrigin(1, 0);
 
+  const mutePill = scene.add.graphics();
+  const muteText = scene.add
+    .text(width - trackPad - 6, 22, '', outlinedTextStyle({ fontSize: '11px' }))
+    .setOrigin(1, 0.5);
+
   let value = Phaser.Math.Clamp(initial01, 0, 1);
+  let savedVolume = value > 0.001 ? value : 0.42;
+  let muted = value <= 0.001;
+
+  const mutePillW = 46;
+  const mutePillH = 22;
+  const mutePillX = width - trackPad - mutePillW;
+  const mutePillY = 12;
+
+  const redrawMute = () => {
+    mutePill.clear();
+    mutePill.fillStyle(muted ? 0x6a4a4a : 0x3a8cad, muted ? 0.95 : 0.85);
+    mutePill.fillRoundedRect(mutePillX, mutePillY, mutePillW, mutePillH, mutePillH / 2);
+    mutePill.lineStyle(2, 0xffffff, muted ? 0.45 : 0.55);
+    mutePill.strokeRoundedRect(mutePillX, mutePillY, mutePillW, mutePillH, mutePillH / 2);
+    muteText.setText(muted ? 'OFF' : 'ON');
+    muteText.setColor(muted ? '#ffd0d0' : '#e8fff0');
+  };
 
   const knobX = () => trackPad + value * trackW;
 
@@ -181,32 +205,61 @@ export function createBubbleVolumeSlider(
     fillGfx.clear();
     knob.clear();
 
-    trackGfx.fillStyle(0x1a3a4a, 0.85);
+    trackGfx.fillStyle(0x1a3a4a, muted ? 0.55 : 0.85);
     trackGfx.fillRoundedRect(trackPad, trackY, trackW, trackH, trackH / 2);
 
-    if (value > 0) {
+    if (value > 0 && !muted) {
       fillGfx.fillStyle(0xffe566, 0.95);
       fillGfx.fillRoundedRect(trackPad, trackY, Math.max(trackH, trackW * value), trackH, trackH / 2);
     }
 
     const kx = knobX();
-    knob.fillStyle(0xffffff, 1);
+    knob.fillStyle(muted ? 0x9aa8b0 : 0xffffff, muted ? 0.65 : 1);
     knob.fillCircle(kx, trackY + trackH / 2, 9);
-    knob.lineStyle(2, 0xc97a1a, 1);
+    knob.lineStyle(2, muted ? 0x556068 : 0xc97a1a, 1);
     knob.strokeCircle(kx, trackY + trackH / 2, 9);
 
-    pctText.setText(`${Math.round(value * 100)}%`);
+    pctText.setText(muted ? 'Muted' : `${Math.round(value * 100)}%`);
+    redrawMute();
   };
 
   const setFromPointer = (localX: number) => {
+    if (muted) return;
     value = Phaser.Math.Clamp((localX - trackPad) / trackW, 0, 1);
+    if (value > 0.001) savedVolume = value;
+    if (value <= 0.001 && !muted) {
+      muted = true;
+      onMuteChange?.(true);
+    } else if (value > 0.001 && muted) {
+      muted = false;
+      onMuteChange?.(false);
+    }
     redraw();
     onChange(value);
+  };
+
+  const setMuted = (nextMuted: boolean) => {
+    if (nextMuted === muted) return;
+    muted = nextMuted;
+    if (muted) {
+      if (value > 0.001) savedVolume = value;
+      value = 0;
+      onChange(0);
+    } else {
+      value = savedVolume > 0.001 ? savedVolume : 0.42;
+      onChange(value);
+    }
+    onMuteChange?.(muted);
+    redraw();
   };
 
   const trackHit = scene.add
     .rectangle(trackPad + trackW / 2, trackY + trackH / 2, trackW + 24, 28, 0xffffff, 0)
     .setInteractive({ useHandCursor: true, draggable: true });
+
+  const muteHit = scene.add
+    .rectangle(mutePillX + mutePillW / 2, mutePillY + mutePillH / 2, mutePillW, mutePillH, 0xffffff, 0)
+    .setInteractive({ useHandCursor: true });
 
   const root = scene.add.container(x, y, [
     g,
@@ -215,7 +268,10 @@ export function createBubbleVolumeSlider(
     fillGfx,
     knob,
     pctText,
+    mutePill,
+    muteText,
     trackHit,
+    muteHit,
   ]);
 
   const pointerToVolume = (pointer: Phaser.Input.Pointer) => {
@@ -231,6 +287,12 @@ export function createBubbleVolumeSlider(
 
   trackHit.on('drag', (p: Phaser.Input.Pointer) => {
     pointerToVolume(p);
+  });
+
+  muteHit.on('pointerdown', (p: Phaser.Input.Pointer) => {
+    p.event?.stopPropagation();
+    SettingsDrawerSuppress.mark();
+    setMuted(!muted);
   });
 
   redraw();

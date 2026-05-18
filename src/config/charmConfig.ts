@@ -36,6 +36,20 @@ export const CHARM_BOX_SLOT_LAYOUT = {
   ],
 } as const;
 
+/** Centered row when no chest art is shown. */
+export const CHARMS_BARE_ROW_LAYOUT = {
+  boxWidth: 300,
+  boxHeight: 0,
+  slots: [
+    { x: 0.08, y: 0.5 },
+    { x: 0.26, y: 0.5 },
+    { x: 0.44, y: 0.5 },
+    { x: 0.62, y: 0.5 },
+    { x: 0.8, y: 0.5 },
+    { x: 0.98, y: 0.5 },
+  ],
+} as const;
+
 export function getCharmDefinition(id: CharmId): CharmDefinition {
   return CHARMS[id];
 }

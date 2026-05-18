@@ -7,15 +7,18 @@ import {
   type AssetKey,
   type AssetManifestEntry,
 } from '../config/assets';
-import { COLORS, SCENE_KEYS } from '../config/gameConfig';
+import { COLORS, GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
+import { LoadingBar } from '../ui/LoadingBar';
+
+const DEPTH = {
+  backdrop: 0,
+  bar: 1,
+  text: 2,
+} as const;
 
 export class PreloadScene extends Phaser.Scene {
   private statusText!: Phaser.GameObjects.Text;
-  private progressGfx!: Phaser.GameObjects.Graphics;
-  private barX = 0;
-  private barY = 0;
-  private barW = 280;
-  private barH = 14;
+  private loadingBar!: LoadingBar;
 
   constructor() {
     super(SCENE_KEYS.preload);
@@ -24,26 +27,12 @@ export class PreloadScene extends Phaser.Scene {
   preload(): void {
     AssetManager.reset();
     AssetManager.clearGameplayTextures(this);
-    this.cameras.main.setBackgroundColor(COLORS.skyBottom);
+    this.cameras.main.setBackgroundColor(COLORS.waterDeep);
 
-    this.barX = (this.scale.width - this.barW) / 2;
-    this.barY = this.scale.height * 0.55;
-
-    const bar = this.add.graphics();
-    this.progressGfx = this.add.graphics();
-    bar.fillStyle(0x2c3e50, 0.8);
-    bar.fillRoundedRect(this.barX, this.barY, this.barW, this.barH, 8);
-
-    this.statusText = this.add
-      .text(this.scale.width / 2, this.barY - 28, 'Loading…', {
-        fontFamily: 'system-ui, sans-serif',
-        fontSize: '18px',
-        color: COLORS.text,
-      })
-      .setOrigin(0.5);
+    this.createLoadingUi();
 
     this.load.on('progress', (value: number) => {
-      this.drawProgress(value);
+      this.loadingBar.setProgress(value);
       const pct = Math.round(value * 100);
       this.statusText.setText(`Loading… ${pct}%`);
     });
@@ -76,22 +65,37 @@ export class PreloadScene extends Phaser.Scene {
     finalizeGameAssets(this);
     AssetManager.markBootstrapped();
 
+    this.loadingBar.setProgress(1);
     this.statusText.setText('Ready!');
     this.time.delayedCall(80, () => {
       this.scene.start(SCENE_KEYS.menu);
     });
   }
 
-  private drawProgress(value: number): void {
-    this.progressGfx.clear();
-    this.progressGfx.fillStyle(0x6ec5e8, 1);
-    this.progressGfx.fillRoundedRect(
-      this.barX + 2,
-      this.barY + 2,
-      (this.barW - 4) * value,
-      this.barH - 4,
-      6,
-    );
+  private createLoadingUi(): void {
+    const cx = GAME_WIDTH / 2;
+    const barY = GAME_HEIGHT * 0.58;
+
+    const backdrop = this.add.graphics().setDepth(DEPTH.backdrop);
+    backdrop.fillStyle(0x061820, 0.72);
+    backdrop.fillRoundedRect(cx - 176, barY - 92, 352, 184, 22);
+    backdrop.lineStyle(3, 0xffffff, 0.18);
+    backdrop.strokeRoundedRect(cx - 176, barY - 92, 352, 184, 22);
+
+    this.loadingBar = new LoadingBar(this, cx, barY);
+    this.loadingBar.setDepth(DEPTH.bar);
+
+    this.statusText = this.add
+      .text(cx, barY - 72, 'Loading…', {
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        stroke: '#061820',
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setDepth(DEPTH.text);
   }
 
   private queueEntry(entry: AssetManifestEntry): void {

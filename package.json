@@ -16,7 +16,8 @@
     "assets:placeholders": "node scripts/generate-placeholders.mjs",
     "assets:water-mask": "node scripts/generate-water-mask.mjs",
     "assets:water-tile": "node scripts/generate-waterfall-tile.mjs",
-    "assets:web-icons": "node scripts/generate-web-icons.mjs"
+    "assets:web-icons": "node scripts/generate-web-icons.mjs",
+    "assets:sun-alpha": "node scripts/soften-sun-alpha.mjs"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.0.0",

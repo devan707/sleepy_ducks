@@ -2,13 +2,11 @@ import Phaser from 'phaser';
 import type { MusicManager } from '../audio/MusicManager';
 import type { SoundManager } from '../audio/SoundManager';
 import { GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
-import { displayPlayerName, getPlayerName, setPlayerName } from '../storage/playerName';
 import {
   getPersonalBests,
   hasAnyPersonalBests,
   PERSONAL_STAT_CARDS,
 } from '../storage/personalBests';
-import { ASSET_KEYS } from '../config/assets';
 import { getMusicVolume, getSfxVolume } from '../storage/audioSettings';
 import { isCharmCollected } from '../storage/charms';
 import { CharmsGrid } from './CharmsGrid';
@@ -18,18 +16,28 @@ import {
   drawBubbleRect,
   SettingsDrawerSuppress,
 } from './bubbleChrome';
-import { gameRectToScreen } from './gameScreenCoords';
 import { captionTextStyle, outlinedTextStyle, titleTextStyle } from './uiChrome';
+import {
+  hidePlayerNameOverlay,
+  showPlayerNameOverlay,
+  syncPlayerNameOverlayValue,
+} from './playerNameOverlay';
 
 const DRAWER_W = 318;
 const PANEL_X_CLOSED = GAME_WIDTH + 4;
 const PANEL_X_OPEN = GAME_WIDTH - DRAWER_W;
 
+export type SettingsDrawerMode = 'menu' | 'gameplay' | 'gameOver';
+
 export type SettingsDrawerOptions = {
   depth: number;
   musicManager: MusicManager;
   soundManager: SoundManager;
-  musicContext?: 'menuUi' | 'gameOver';
+  musicContext?: 'menuUi' | 'gameplay' | 'gameOver';
+  mode?: SettingsDrawerMode;
+  onOpen?: () => void;
+  onClose?: () => void;
+  onQuitToMenu?: () => void;
 };
 
 export class SettingsDrawer {
@@ -49,8 +57,8 @@ export class SettingsDrawer {
   private backdrop: Phaser.GameObjects.Rectangle;
   private personalBestNodes: Phaser.GameObjects.GameObject[] = [];
   private charmsNodes: Phaser.GameObjects.GameObject[] = [];
-  private nameInput: HTMLInputElement | null = null;
   private visible = false;
+  private scaleResizeHandler: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene, opts: SettingsDrawerOptions) {
     this.scene = scene;
@@ -86,15 +94,23 @@ export class SettingsDrawer {
     SettingsDrawer.suppressScenePointer = true;
     this.root.setVisible(true);
     this.refreshPersonalBests();
-    this.syncNameInput();
+    syncPlayerNameOverlayValue();
     this.refreshCharmsSection();
-    this.showNameInput();
+    this.repositionNameOverlay();
+    this.opts.onOpen?.();
+
+    this.scaleResizeHandler = () => {
+      if (this.visible) this.repositionNameOverlay();
+    };
+    this.scene.scale.on('resize', this.scaleResizeHandler);
 
     this.scene.tweens.add({
       targets: this.panel,
       x: PANEL_X_OPEN,
       duration: 280,
       ease: 'Cubic.easeOut',
+      onUpdate: () => this.repositionNameOverlay(),
+      onComplete: () => this.repositionNameOverlay(),
     });
     this.backdrop.setAlpha(0);
     this.scene.tweens.add({
@@ -107,10 +123,12 @@ export class SettingsDrawer {
   close(): void {
     if (!this.visible) return;
     this.visible = false;
-    this.hideNameInput();
-    if (this.nameInput) {
-      setPlayerName(this.nameInput.value);
+    hidePlayerNameOverlay();
+    if (this.scaleResizeHandler) {
+      this.scene.scale.off('resize', this.scaleResizeHandler);
+      this.scaleResizeHandler = null;
     }
+    this.opts.onClose?.();
 
     this.scene.tweens.add({
       targets: this.panel,
@@ -134,7 +152,11 @@ export class SettingsDrawer {
   }
 
   destroy(): void {
-    this.hideNameInput();
+    hidePlayerNameOverlay();
+    if (this.scaleResizeHandler) {
+      this.scene.scale.off('resize', this.scaleResizeHandler);
+      this.scaleResizeHandler = null;
+    }
     this.root.destroy();
   }
 
@@ -150,6 +172,14 @@ export class SettingsDrawer {
     });
     panelBg.lineStyle(4, 0xffffff, 0.5);
     panelBg.strokeRoundedRect(0, 0, DRAWER_W, GAME_HEIGHT, { tl: 22, bl: 22, tr: 0, br: 0 });
+
+    const panelHit = this.scene.add
+      .rectangle(DRAWER_W / 2, GAME_HEIGHT / 2, DRAWER_W, GAME_HEIGHT, 0x000000, 0)
+      .setInteractive();
+    panelHit.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      p.event?.stopPropagation();
+      SettingsDrawer.suppressScenePointer = true;
+    });
 
     const title = this.scene.add
       .text(28, 48, 'Settings', {
@@ -187,10 +217,11 @@ export class SettingsDrawer {
       onChange: (volume) => {
         this.opts.musicManager.setMusicVolume(volume);
         if (volume > 0 && !this.opts.musicManager.getActiveTrack()) {
-          const ctx = this.opts.musicContext ?? 'menuUi';
-          if (ctx === 'gameOver') this.opts.musicManager.playGameOver();
-          else this.opts.musicManager.playMenuUi();
+          this.resumeMusicContext();
         }
+      },
+      onMuteChange: (muted) => {
+        this.opts.musicManager.setMusicEnabled(!muted);
       },
     });
 
@@ -207,6 +238,9 @@ export class SettingsDrawer {
           this.opts.soundManager.tryUnlock();
           this.opts.soundManager.play('tap');
         }
+      },
+      onMuteChange: (muted) => {
+        this.opts.soundManager.setSfxEnabled(!muted);
       },
     });
 
@@ -225,9 +259,23 @@ export class SettingsDrawer {
       .setOrigin(0.5);
 
     const charmsSection = this.buildCharmsSection();
-    const howToLink = this.createHowToPlayLink(GAME_HEIGHT - 44);
+    const footerLink = this.createFooterLink(
+      GAME_HEIGHT - 44,
+      this.opts.mode === 'gameplay' ? 'Back to home →' : 'How to play →',
+      () => {
+        if (this.opts.mode === 'gameplay') {
+          this.opts.onQuitToMenu?.();
+          return;
+        }
+        this.close();
+        this.scene.time.delayedCall(260, () => {
+          this.scene.scene.start(SCENE_KEYS.rules);
+        });
+      },
+    );
 
     this.panel.add([
+      panelHit,
       panelBg,
       title,
       closeBubble,
@@ -239,10 +287,9 @@ export class SettingsDrawer {
       bestsTitleBubble,
       bestsTitle,
       ...charmsSection,
-      howToLink,
+      footerLink,
     ]);
 
-    this.createNameInputDom();
     this.refreshPersonalBests();
     this.refreshCharmsSection();
   }
@@ -281,20 +328,13 @@ export class SettingsDrawer {
     }
     this.charmsNodes = [];
 
-    const boxY = 718;
-    const boxScale = 0.62;
-    if (this.scene.textures.exists(ASSET_KEYS.charmBox)) {
-      const box = this.scene.add.image(DRAWER_W / 2, boxY, ASSET_KEYS.charmBox);
-      box.setScale(boxScale);
-      this.panel.add(box);
-      this.charmsNodes.push(box);
-    }
-
+    const gridY = 718;
     const grid = new CharmsGrid(this.scene, {
       centerX: DRAWER_W / 2,
-      centerY: boxY,
-      scale: boxScale,
+      centerY: gridY,
+      scale: 1,
       showLocked: true,
+      bareRow: true,
     });
     this.panel.add(grid);
     this.charmsNodes.push(grid);
@@ -309,8 +349,18 @@ export class SettingsDrawer {
     }
   }
 
-  private createHowToPlayLink(y: number): Phaser.GameObjects.Container {
-    const label = 'How to play →';
+  private resumeMusicContext(): void {
+    const ctx = this.opts.musicContext ?? 'menuUi';
+    if (ctx === 'gameOver') this.opts.musicManager.playGameOver();
+    else if (ctx === 'gameplay') this.opts.musicManager.playGameplay();
+    else this.opts.musicManager.playMenuUi();
+  }
+
+  private createFooterLink(
+    y: number,
+    label: string,
+    onSelect: () => void,
+  ): Phaser.GameObjects.Container {
     const text = this.scene.add
       .text(0, 0, label, outlinedTextStyle({
         fontSize: '17px',
@@ -341,10 +391,7 @@ export class SettingsDrawer {
     hit.on('pointerdown', (p: Phaser.Input.Pointer) => {
       p.event?.stopPropagation();
       SettingsDrawer.suppressScenePointer = true;
-      this.close();
-      this.scene.time.delayedCall(260, () => {
-        this.scene.scene.start(SCENE_KEYS.rules);
-      });
+      onSelect();
     });
 
     hit.on('pointerover', () => {
@@ -359,45 +406,12 @@ export class SettingsDrawer {
     return root;
   }
 
-  private createNameInputDom(): void {
-    if (this.nameInput) return;
-
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.maxLength = 18;
-    input.placeholder = displayPlayerName();
-    input.autocomplete = 'name';
-    input.className = 'sd-player-name-input';
-    input.value = getPlayerName();
-    input.addEventListener('change', () => setPlayerName(input.value));
-    input.addEventListener('blur', () => setPlayerName(input.value));
-
-    document.body.appendChild(input);
-    this.nameInput = input;
-    this.hideNameInput();
-  }
-
-  private syncNameInput(): void {
-    if (this.nameInput) {
-      this.nameInput.value = getPlayerName();
+  private repositionNameOverlay(): void {
+    if (!this.visible) {
+      hidePlayerNameOverlay();
+      return;
     }
-  }
-
-  private showNameInput(): void {
-    if (!this.nameInput) return;
-    const rect = gameRectToScreen(this.scene.game, PANEL_X_OPEN + 40, 124, DRAWER_W - 80, 28);
-    const input = this.nameInput;
-    input.style.display = 'block';
-    input.style.left = `${rect.left}px`;
-    input.style.top = `${rect.top}px`;
-    input.style.width = `${rect.width}px`;
-    input.style.height = `${rect.height}px`;
-  }
-
-  private hideNameInput(): void {
-    if (this.nameInput) {
-      this.nameInput.style.display = 'none';
-    }
+    showPlayerNameOverlay(this.scene.game, this.panel.x);
   }
 
   private refreshPersonalBests(): void {
