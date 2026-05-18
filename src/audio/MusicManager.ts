@@ -140,7 +140,8 @@ export class MusicManager {
   }
 
   /**
-   * 3s overlap crossfade at sunset: Sunday Morning Paddle out, Beneath the First Star in (loops).
+   * Crossfade at sunset: day track out, night track in (loops).
+   * Night clip must start at volume 0 — clips default to full music volume.
    */
   crossfadeGameplayToNight(): void {
     if (this.gameplayNightCrossfaded || !this.musicEnabled) return;
@@ -154,10 +155,18 @@ export class MusicManager {
     const startCrossfade = () => {
       if (!this.musicEnabled || !this.gameplayNightCrossfaded) return;
 
+      to.pause();
       to.currentTime = 0;
-      const playFrom = from.paused ? from.play() : Promise.resolve();
-      const playTo = to.play();
-      void Promise.all([playFrom, playTo]).catch(() => {
+      to.volume = 0;
+      from.volume = targetVol;
+
+      if (from.paused || from.ended) {
+        void from.play().catch(() => {
+          /* Autoplay blocked until gesture. */
+        });
+      }
+
+      void to.play().catch(() => {
         /* Autoplay blocked until gesture. */
       });
 

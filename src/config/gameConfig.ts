@@ -197,9 +197,9 @@ export const DAY_NIGHT = {
   /** How quickly the purple wash fades in after sunset (seconds). */
   nightPurpleFadeInSec: 14,
   /** Wait this long after visual sunset before gameplay music crossfade. */
-  musicCrossfadeDelaySec: 8,
-  /** Overlap duration: Sunday Morning Paddle out, Beneath the First Star in. */
-  gameplayMusicCrossfadeMs: 6500,
+  musicCrossfadeDelaySec: 15,
+  /** Overlap duration: day track out, night track in. */
+  gameplayMusicCrossfadeMs: 5000,
   sunDisplayHeight: 96,
   /** Screen X for sun path (right side of sky). */
   sunX: GAME_WIDTH * 0.68,
