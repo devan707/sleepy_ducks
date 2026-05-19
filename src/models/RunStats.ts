@@ -1,8 +1,8 @@
 import type { DuckKind } from '../config/gameConfig';
 
-/** True when a duck reaching the mist should increment `ducksMissed` (not decoys). */
+/** True when a duck reaching the mist should increment `ducksMissed` (not decoys/golden). */
 export function isDuckMissForStats(kind: DuckKind): boolean {
-  return kind !== 'decoy';
+  return kind !== 'decoy' && kind !== 'golden';
 }
 
 export interface RunStats {

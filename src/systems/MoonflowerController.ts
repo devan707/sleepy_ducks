@@ -85,14 +85,19 @@ export class MoonflowerController {
   private beginCollect(): void {
     if (!this.moonflower || this.collectedThisRun) return;
 
+    const world = new Phaser.Math.Vector2();
+    this.moonflower.getWorldTransformMatrix().transformPoint(0, 0, world);
+    const fromX = world.x;
+    const fromY = world.y;
     this.collectedThisRun = true;
     this.moonflower.destroy();
     this.moonflower = null;
 
-    this.toast.show({
-      onComplete: () => {
-        this.scene.events.emit(GameEvents.CHARM_COLLECTED, { id: 'moonflower' });
-      },
+    this.toast.show();
+    this.scene.events.emit(GameEvents.CHARM_COLLECTED, {
+      id: 'moonflower',
+      x: fromX,
+      y: fromY,
     });
   }
 }

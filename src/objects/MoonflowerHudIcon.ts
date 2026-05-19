@@ -4,23 +4,22 @@ import {
   MOONFLOWER_HUD_SILHOUETTE_KEY,
 } from '../assets/moonflowerHudSilhouette';
 import { MOONFLOWER_ATLAS_KEYS, MOONFLOWER_ANIM_KEYS } from '../config/moonflowerAssets';
+import { MOONFLOWER, STAGE } from '../config/gameConfig';
 
 const ICON_H = 28;
+const FLY_DURATION_MS = 460;
 
 /**
  * Empty slot: grey moonflower silhouette (from sway frame) with 1px outline.
- * This run: real sway animation fills in bottom-up when collected.
+ * Collected: full-color sway — flies in from the cliff collect point.
  */
 export class MoonflowerHudIcon {
   private scene: Phaser.Scene;
   private root: Phaser.GameObjects.Container;
   private silhouette: Phaser.GameObjects.Image;
-  private fillMask: Phaser.GameObjects.Graphics;
   private colored: Phaser.GameObjects.Sprite;
   private displayW: number;
   private displayH: number;
-  private fillLevel01 = 0;
-  private fillTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -36,9 +35,8 @@ export class MoonflowerHudIcon {
     this.silhouette.setDisplaySize(this.displayW, this.displayH);
     this.silhouette.setOrigin(0.5);
 
-    this.fillMask = scene.add.graphics();
     this.colored = this.createColoredSprite();
-    this.colored.setMask(this.fillMask.createGeometryMask());
+    this.colored.setVisible(false);
 
     this.root.add([this.silhouette, this.colored]);
     this.setCollectedThisRun(false, false);
@@ -48,70 +46,69 @@ export class MoonflowerHudIcon {
     return this.root;
   }
 
+  getWorldCenter(): { x: number; y: number } {
+    const out = new Phaser.Math.Vector2();
+    this.root.getWorldTransformMatrix().transformPoint(0, 0, out);
+    return { x: out.x, y: out.y };
+  }
+
   /** Sync HUD slot with whether this run's moonflower was collected. */
-  setCollectedThisRun(collected: boolean, animate: boolean): void {
+  setCollectedThisRun(collected: boolean, _animate = false): void {
     if (!collected) {
-      this.fillTween?.stop();
-      this.fillTween = null;
-      this.setFillLevel(0);
+      this.colored.setVisible(false);
+      this.silhouette.setVisible(true);
+      this.silhouette.setAlpha(1);
       return;
     }
 
-    if (!animate || this.fillLevel01 >= 0.999) {
-      this.fillTween?.stop();
-      this.fillTween = null;
-      this.setFillLevel(1);
-      return;
+    this.showFullColor();
+  }
+
+  /** Fast fly from cliff collect point into the HUD slot. */
+  flyIntoPlace(fromX: number, fromY: number): void {
+    const { x: targetX, y: targetY } = this.getWorldCenter();
+    const key = this.scene.textures.exists(MOONFLOWER_ATLAS_KEYS.sway)
+      ? MOONFLOWER_ATLAS_KEYS.sway
+      : MOONFLOWER_ATLAS_KEYS.bloom;
+
+    const flyer = this.scene.add.sprite(fromX, fromY, key, 'frame_003');
+    flyer.setDepth(STAGE.hudDepth + 8);
+    flyer.setScrollFactor(0);
+    if (this.scene.anims.exists(MOONFLOWER_ANIM_KEYS.sway)) {
+      flyer.play(MOONFLOWER_ANIM_KEYS.sway);
     }
 
-    this.playFillUp();
-  }
+    const frame = flyer.frame;
+    const startH = MOONFLOWER.displayHeight * 0.72;
+    const startFit = startH / frame.height;
+    flyer.setDisplaySize(frame.width * startFit, startH);
 
-  destroy(): void {
-    this.fillTween?.stop();
-    this.root.destroy();
-  }
+    this.silhouette.setAlpha(1);
+    this.colored.setVisible(false);
 
-  private playFillUp(): void {
-    this.fillTween?.stop();
-    this.setFillLevel(0);
-
-    const state = { t: 0 };
-    this.fillTween = this.scene.tweens.add({
-      targets: state,
-      t: 1,
-      duration: 720,
-      ease: 'Cubic.easeOut',
-      onUpdate: () => {
-        this.setFillLevel(state.t);
-      },
+    this.scene.tweens.add({
+      targets: flyer,
+      x: targetX,
+      y: targetY,
+      displayWidth: this.displayW,
+      displayHeight: this.displayH,
+      duration: FLY_DURATION_MS,
+      ease: 'Cubic.easeIn',
       onComplete: () => {
-        this.fillTween = null;
-        this.setFillLevel(1);
+        flyer.destroy();
+        this.showFullColor();
       },
     });
   }
 
-  private setFillLevel(level01: number): void {
-    this.fillLevel01 = Phaser.Math.Clamp(level01, 0, 1);
+  destroy(): void {
+    this.root.destroy();
+  }
 
-    const showColor = this.fillLevel01 > 0.02;
-    this.colored.setVisible(showColor);
-    this.silhouette.setVisible(this.fillLevel01 < 0.98);
-    this.silhouette.setAlpha(1 - this.fillLevel01 * 0.9);
-
-    this.fillMask.clear();
-    if (showColor) {
-      const fillH = this.displayH * this.fillLevel01;
-      const top = this.displayH / 2 - fillH;
-      this.fillMask.fillStyle(0xffffff);
-      this.fillMask.fillRect(
-        -this.displayW / 2 - 2,
-        top,
-        this.displayW + 4,
-        fillH + 2,
-      );
-    }
+  private showFullColor(): void {
+    this.colored.setVisible(true);
+    this.silhouette.setVisible(false);
+    this.colored.setAlpha(1);
   }
 
   private createColoredSprite(): Phaser.GameObjects.Sprite {
@@ -124,7 +121,6 @@ export class MoonflowerHudIcon {
     sprite.setDisplaySize(frame.width * fit, frame.height * fit);
     sprite.setOrigin(0.5);
     sprite.setTint(0xffffff);
-    sprite.setVisible(false);
     if (this.scene.anims.exists(MOONFLOWER_ANIM_KEYS.sway)) {
       sprite.play(MOONFLOWER_ANIM_KEYS.sway);
     }

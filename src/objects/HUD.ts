@@ -188,6 +188,14 @@ export class HUD {
     return { x: egg.x + this.hudRoot.x, y: egg.y + this.hudRoot.y };
   }
 
+  playMoonflowerCollectFly(fromX: number, fromY: number): void {
+    this.moonflowerHudIcon.flyIntoPlace(fromX, fromY);
+  }
+
+  getMoonflowerHudWorldPosition(): { x: number; y: number } {
+    return this.moonflowerHudIcon.getWorldCenter();
+  }
+
   setMoonflowerCollectedThisRun(collected: boolean, animate = false): void {
     this.moonflowerHudIcon.setCollectedThisRun(collected, animate);
   }

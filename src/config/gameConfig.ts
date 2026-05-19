@@ -143,9 +143,9 @@ export const COMBO = {
   /** Reference window — actual drain scales gently with spawn difficulty. */
   baseTimeoutMs: 2200,
   /** Drain multiplier at run start (lower = meter empties slower). */
-  drainMultAtStart: 0.65,
+  drainMultAtStart: 0.75,
   /** Drain at peak spawn rate — kept close to start so late game stays chainable. */
-  drainMultAtPeak: 0.8,
+  drainMultAtPeak: 0.92,
   /** Each combo level above 2 slightly slows drain (reward longer streaks). */
   streakDrainReliefPerLevel: 0.005,
   streakDrainReliefMax: 0.1,

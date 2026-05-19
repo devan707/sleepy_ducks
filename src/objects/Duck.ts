@@ -380,10 +380,10 @@ export class Duck extends Phaser.GameObjects.Container {
     }
   }
 
-  /** Past the mist line: decoys vanish silently; real ducks count as missed. */
+  /** Past the mist line: decoys/golden vanish silently; mallards count as missed. */
   private checkFallenIntoMist(): void {
     if (this.y <= this.layout.mistZoneTop) return;
-    if (this.kind === 'decoy') {
+    if (this.kind === 'decoy' || this.kind === 'golden') {
       if (this.lifecycle !== 'sleeping') return;
       this.lifecycle = 'gone';
       this.disableInteractive();
@@ -738,7 +738,7 @@ export class Duck extends Phaser.GameObjects.Container {
     this.lifecycle = 'gone';
     this.disableInteractive();
 
-    if (this.kind === 'decoy') {
+    if (this.kind === 'decoy' || this.kind === 'golden') {
       this.destroy();
       return;
     }

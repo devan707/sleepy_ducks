@@ -590,8 +590,12 @@ export class GameScene extends Phaser.Scene {
     this.tryMoonflowerSunsetHint();
   }
 
-  private onCharmCollected(): void {
-    this.hud.setMoonflowerCollectedThisRun(true, true);
+  private onCharmCollected(payload: { id: string; x?: number; y?: number }): void {
+    if (payload.id === 'moonflower' && payload.x != null && payload.y != null) {
+      this.hud.playMoonflowerCollectFly(payload.x, payload.y);
+      return;
+    }
+    this.hud.setMoonflowerCollectedThisRun(true, false);
   }
 
   /** Seven seconds before sunset — remind players about the night charm. */
@@ -715,7 +719,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onDuckMissed(payload: DuckMissedPayload): void {
-    if (this.calibrationMode || !isDuckMissForStats(payload.kind)) return;
+    if (this.calibrationMode || payload.kind === 'golden') return;
+    if (!isDuckMissForStats(payload.kind)) return;
 
     const { x, y } = payload;
 
