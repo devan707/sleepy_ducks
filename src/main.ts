@@ -8,6 +8,8 @@ import { GameScene } from './scenes/GameScene';
 import { MenuScene } from './scenes/MenuScene';
 import { RulesScene } from './scenes/RulesScene';
 import { PreloadScene } from './scenes/PreloadScene';
+import { initInstallPromptCapture } from './pwa/installPrompt';
+import { registerServiceWorker } from './pwa/registerServiceWorker';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -47,11 +49,26 @@ const config: Phaser.Types.Core.GameConfig = {
 
 MusicManager.startEarly();
 
-const unlockAudioOnGesture = (): void => {
-  MusicManager.getInstance().tryUnlock();
+initInstallPromptCapture();
+registerServiceWorker();
+
+const stopAudioUnlockListeners = (): void => {
+  document.removeEventListener('pointerdown', unlockAudioOnGesture);
+  document.removeEventListener('touchstart', unlockAudioOnGesture);
+  document.removeEventListener('keydown', unlockAudioOnGesture);
 };
-document.addEventListener('pointerdown', unlockAudioOnGesture, { once: true, passive: true });
-document.addEventListener('keydown', unlockAudioOnGesture, { once: true });
+
+const unlockAudioOnGesture = (): void => {
+  const music = MusicManager.getInstance();
+  music.tryUnlock();
+  if (music.isActiveTrackPlaying()) {
+    stopAudioUnlockListeners();
+  }
+};
+
+document.addEventListener('pointerdown', unlockAudioOnGesture, { passive: true });
+document.addEventListener('touchstart', unlockAudioOnGesture, { passive: true });
+document.addEventListener('keydown', unlockAudioOnGesture);
 
 const game = new Phaser.Game(config);
 

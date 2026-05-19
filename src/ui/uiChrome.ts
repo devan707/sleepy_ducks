@@ -4,6 +4,10 @@ import { GAME_HEIGHT, GAME_WIDTH } from '../config/gameConfig';
 const FONT =
   'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
+/** Extra-heavy face for settings drawer labels. */
+const SETTINGS_HEAVY_FONT =
+  '"Arial Black", "Arial Bold", "Helvetica Neue", system-ui, sans-serif';
+
 export const UI_CHROME = {
   accentGold: '#ffe566',
   textPrimary: '#ffffff',
@@ -115,6 +119,22 @@ export function labelTextStyle(
     color: UI_CHROME.labelLight,
     letterSpacing: 4,
     strokeThickness: 2,
+    ...overrides,
+  });
+}
+
+/** Settings drawer — section and field labels (not stat values). */
+export function settingsLabelTextStyle(
+  overrides?: Phaser.Types.GameObjects.Text.TextStyle,
+): Phaser.Types.GameObjects.Text.TextStyle {
+  return outlinedTextStyle({
+    fontFamily: SETTINGS_HEAVY_FONT,
+    fontStyle: 'bold',
+    fontSize: '11px',
+    color: UI_CHROME.textPrimary,
+    stroke: UI_CHROME.ink,
+    strokeThickness: 3,
+    letterSpacing: 2,
     ...overrides,
   });
 }

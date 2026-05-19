@@ -36,17 +36,16 @@ export const CHARM_BOX_SLOT_LAYOUT = {
   ],
 } as const;
 
-/** Centered row when no chest art is shown. */
+/** Centered row in settings drawer — 5 slots, 15px margin to panel edge (318px panel, r=22). */
 export const CHARMS_BARE_ROW_LAYOUT = {
-  boxWidth: 300,
+  boxWidth: 244,
   boxHeight: 0,
   slots: [
-    { x: 0.08, y: 0.5 },
-    { x: 0.26, y: 0.5 },
-    { x: 0.44, y: 0.5 },
-    { x: 0.62, y: 0.5 },
-    { x: 0.8, y: 0.5 },
-    { x: 0.98, y: 0.5 },
+    { x: 0, y: 0.5 },
+    { x: 0.25, y: 0.5 },
+    { x: 0.5, y: 0.5 },
+    { x: 0.75, y: 0.5 },
+    { x: 1, y: 0.5 },
   ],
 } as const;
 

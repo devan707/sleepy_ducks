@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
-import { arcadeHudTextStyle, captionTextStyle, outlinedTextStyle } from './uiChrome';
+import { arcadeHudTextStyle, captionTextStyle, outlinedTextStyle, settingsLabelTextStyle, UI_CHROME } from './uiChrome';
+
+/** Bright green for sound/music ON toggle in settings. */
+const SOUND_ON_GREEN = 0x52e078;
 
 export type BubbleRectOptions = {
   fill?: number;
@@ -58,10 +61,9 @@ export function createBubbleStatCard(
   drawBubbleRect(g, 0, 0, width, height, { fill, radius: 16 });
 
   const labelText = scene.add
-    .text(width / 2, height - 10, label.toUpperCase(), captionTextStyle({
-      fontSize: '9px',
+    .text(width / 2, height - 10, label.toUpperCase(), settingsLabelTextStyle({
+      fontSize: '10px',
       letterSpacing: 1,
-      color: '#d5eef8',
       align: 'center',
     }))
     .setOrigin(0.5, 1);
@@ -70,7 +72,7 @@ export function createBubbleStatCard(
   const valueText = scene.add
     .text(width / 2, height / 2 - 6, value, arcadeHudTextStyle({
       fontSize: valueFontSize,
-      color: '#ffffff',
+      color: UI_CHROME.accentGold,
       strokeThickness: 4,
       align: 'center',
     }))
@@ -143,6 +145,8 @@ export type BubbleVolumeSliderOptions = {
   height: number;
   label: string;
   initial01: number;
+  /** Bubble panel fill (defaults to settings teal). */
+  backgroundFill?: number;
   onChange: (volume01: number) => void;
   /** Called when the sound-off toggle changes. */
   onMuteChange?: (muted: boolean) => void;
@@ -153,12 +157,16 @@ export function createBubbleVolumeSlider(
   scene: Phaser.Scene,
   opts: BubbleVolumeSliderOptions,
 ): Phaser.GameObjects.Container {
-  const { x, y, width, height, label, initial01, onChange, onMuteChange } = opts;
+  const { x, y, width, height, label, initial01, onChange, onMuteChange, backgroundFill } =
+    opts;
   const g = scene.add.graphics();
-  drawBubbleRect(g, 0, 0, width, height, { fill: 0x2f6f88, radius: 16 });
+  drawBubbleRect(g, 0, 0, width, height, {
+    fill: backgroundFill ?? 0x2f6f88,
+    radius: 16,
+  });
 
   const labelText = scene.add
-    .text(14, 14, label, outlinedTextStyle({ fontSize: '15px' }))
+    .text(14, 14, label, settingsLabelTextStyle({ fontSize: '16px', letterSpacing: 0 }))
     .setOrigin(0, 0);
 
   const trackPad = 14;
@@ -190,12 +198,12 @@ export function createBubbleVolumeSlider(
 
   const redrawMute = () => {
     mutePill.clear();
-    mutePill.fillStyle(muted ? 0x6a4a4a : 0x3a8cad, muted ? 0.95 : 0.85);
+    mutePill.fillStyle(muted ? 0x6a4a4a : SOUND_ON_GREEN, muted ? 0.95 : 0.95);
     mutePill.fillRoundedRect(mutePillX, mutePillY, mutePillW, mutePillH, mutePillH / 2);
-    mutePill.lineStyle(2, 0xffffff, muted ? 0.45 : 0.55);
+    mutePill.lineStyle(2, 0xffffff, muted ? 0.45 : 0.65);
     mutePill.strokeRoundedRect(mutePillX, mutePillY, mutePillW, mutePillH, mutePillH / 2);
     muteText.setText(muted ? 'OFF' : 'ON');
-    muteText.setColor(muted ? '#ffd0d0' : '#e8fff0');
+    muteText.setColor(muted ? '#ffd0d0' : '#0a2218');
   };
 
   const knobX = () => trackPad + value * trackW;

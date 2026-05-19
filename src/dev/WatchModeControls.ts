@@ -11,15 +11,21 @@ import {
   isWatchTimePaused,
   toggleWatchTimePaused,
 } from './watchTime';
+import {
+  isWatchInstructionsVisible,
+  resetWatchInstructions,
+  toggleWatchInstructionsVisible,
+} from './watchInstructions';
 import { isDevMode } from './isDevMode';
 
 export type WatchModeControlsOptions = {
   onChange: (active: boolean) => void;
   onSkipTime: (deltaSec: number) => void;
+  onInstructionsVisibleChange?: (visible: boolean) => void;
 };
 
-const BADGE_IDLE = 'WATCH — P pause · , +5s · . +15s';
-const BADGE_PAUSED = 'WATCH PAUSED — P resume · , +5s · . +15s';
+const BADGE_IDLE = 'WATCH — P pause · , +5s · . +15s · H hide help';
+const BADGE_PAUSED = 'WATCH PAUSED — P resume · , +5s · . +15s · H hide help';
 
 /**
  * Dev-only: W = watch mode; P / , / . control run time while watching.
@@ -32,6 +38,7 @@ export class WatchModeControls {
   private pauseKey: Phaser.Input.Keyboard.Key | null = null;
   private skipSmallKey: Phaser.Input.Keyboard.Key | null = null;
   private skipLargeKey: Phaser.Input.Keyboard.Key | null = null;
+  private helpKey: Phaser.Input.Keyboard.Key | null = null;
   private lastToggleMs = 0;
   private lastActionMs = 0;
 
@@ -56,7 +63,7 @@ export class WatchModeControls {
       .setOrigin(0.5, 0)
       .setDepth(STAGE.hudDepth + 2)
       .setScrollFactor(0)
-      .setVisible(isWatchModeActive());
+      .setVisible(isWatchModeActive() && isWatchInstructionsVisible());
 
     this.refreshBadge();
 
@@ -67,11 +74,15 @@ export class WatchModeControls {
     this.pauseKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.P);
     this.skipSmallKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.COMMA);
     this.skipLargeKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.PERIOD);
+    this.helpKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.H);
 
     this.watchKey.on('down', this.onWatchKey, this);
     this.pauseKey.on('down', this.onPauseKey, this);
     this.skipSmallKey.on('down', this.onSkipSmall, this);
     this.skipLargeKey.on('down', this.onSkipLarge, this);
+    this.helpKey.on('down', this.onHelpKey, this);
+
+    this.syncInstructionsUi();
   }
 
   private onWatchKey(): void {
@@ -79,10 +90,26 @@ export class WatchModeControls {
     if (now - this.lastToggleMs < 400) return;
     this.lastToggleMs = now;
     const active = toggleWatchMode();
-    this.badge?.setVisible(active);
+    if (active) {
+      resetWatchInstructions();
+    }
+    this.syncInstructionsUi();
     this.opts.onChange(active);
     this.refreshBadge();
     this.flashToggle(active);
+  }
+
+  private onHelpKey(): void {
+    if (!this.consumeAction() || !isWatchModeActive()) return;
+    const visible = toggleWatchInstructionsVisible();
+    this.syncInstructionsUi();
+    this.flashMessage(visible ? 'Help shown' : 'Help hidden');
+  }
+
+  private syncInstructionsUi(): void {
+    const show = isWatchModeActive() && isWatchInstructionsVisible();
+    this.badge?.setVisible(show);
+    this.opts.onInstructionsVisibleChange?.(show);
   }
 
   private onPauseKey(): void {
@@ -149,6 +176,7 @@ export class WatchModeControls {
     this.pauseKey?.off('down', this.onPauseKey, this);
     this.skipSmallKey?.off('down', this.onSkipSmall, this);
     this.skipLargeKey?.off('down', this.onSkipLarge, this);
+    this.helpKey?.off('down', this.onHelpKey, this);
     this.badge?.destroy();
     this.badge = null;
   }

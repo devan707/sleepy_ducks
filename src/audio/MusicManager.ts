@@ -20,6 +20,8 @@ export class MusicManager {
   private readonly clips: Record<MusicTrack, HTMLAudioElement>;
   private activeTrack: MusicTrack | null = null;
   private musicEnabled = isMusicEnabled();
+  /** Set after first user gesture — retries playback when clips finish buffering. */
+  private userGestureUnlocked = false;
   private gameplayNightCrossfaded = false;
   private gameplayMusicTimelineActive = false;
   private nightTrackStarted = false;
@@ -181,6 +183,13 @@ export class MusicManager {
     return this.activeTrack;
   }
 
+  /** True when the active clip is actually audible (not blocked or still buffering). */
+  isActiveTrackPlaying(): boolean {
+    if (!this.activeTrack || !this.musicEnabled || this.isPlaybackBlocked()) return false;
+    const clip = this.clips[this.activeTrack];
+    return !clip.paused && !clip.ended && clip.currentTime > 0;
+  }
+
   private preloadAll(): void {
     for (const clip of Object.values(this.clips)) {
       if (clip.readyState < HTMLMediaElement.HAVE_METADATA) {
@@ -191,13 +200,16 @@ export class MusicManager {
 
   /** Preload clips during a user gesture (mobile unlock). */
   tryUnlock(): void {
+    this.userGestureUnlocked = true;
     this.preloadAll();
-    if (this.musicEnabled && this.activeTrack) {
-      if (this.activeTrack === 'gameplayNight') {
-        this.play('gameplayNight');
-      } else {
-        this.play(this.activeTrack);
-      }
+    if (!this.musicEnabled) return;
+    if (!this.activeTrack) {
+      this.activeTrack = 'menuUi';
+    }
+    if (this.activeTrack === 'gameplayNight') {
+      this.play('gameplayNight');
+    } else {
+      this.play(this.activeTrack);
     }
   }
 
@@ -331,6 +343,15 @@ export class MusicManager {
       startPlayback();
     } else {
       next.addEventListener('canplay', startPlayback, { once: true });
+      next.addEventListener(
+        'canplaythrough',
+        () => {
+          if (this.userGestureUnlocked && next.paused) {
+            startPlayback();
+          }
+        },
+        { once: true },
+      );
       next.load();
     }
   }

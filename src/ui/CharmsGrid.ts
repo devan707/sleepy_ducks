@@ -1,9 +1,8 @@
 import Phaser from 'phaser';
 import {
   CHARM_BOX_SLOT_LAYOUT,
-  CHARMS_BARE_ROW_LAYOUT,
-  CHARM_SLOT_COUNT,
   CHARMS,
+  CHARMS_BARE_ROW_LAYOUT,
   type CharmId,
 } from '../config/charmConfig';
 import { getCharmCount, loadCharms } from '../storage/charms';
@@ -36,7 +35,7 @@ export class CharmsGrid extends Phaser.GameObjects.Container {
     const state = loadCharms();
     const { boxWidth, boxHeight, slots } = this.slotLayout;
 
-    for (let i = 0; i < CHARM_SLOT_COUNT; i++) {
+    for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       const lx = (slot.x - 0.5) * boxWidth * scale;
       const ly = (slot.y - 0.5) * boxHeight * scale;

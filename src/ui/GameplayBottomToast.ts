@@ -9,7 +9,8 @@ export type GameplayBottomToastOptions = {
   imageKey?: string;
   imageFrame?: string;
   imageHeight?: number;
-  durationMs?: number;
+  /** Override visible hold time after fade-in (ms). */
+  holdMs?: number;
   onComplete?: () => void;
 };
 
@@ -33,9 +34,12 @@ export class GameplayBottomToast {
       imageKey,
       imageFrame,
       imageHeight = GAMEPLAY_TOAST.imageSize,
-      durationMs = GAMEPLAY_TOAST.durationMs,
+      holdMs = GAMEPLAY_TOAST.holdMs,
       onComplete,
     } = opts;
+
+    const fadeInMs = GAMEPLAY_TOAST.fadeInMs;
+    const fadeOutMs = GAMEPLAY_TOAST.fadeOutMs;
 
     const cx = GAME_WIDTH / 2;
     const cy = getGameplayToastY();
@@ -44,11 +48,11 @@ export class GameplayBottomToast {
 
     const label = this.scene.add
       .text(0, 0, text, captionTextStyle({
-        fontSize: '14px',
+        fontSize: GAMEPLAY_TOAST.fontSize,
         color: '#ecf8ff',
         align: 'center',
-        strokeThickness: 0,
-        wordWrap: { width: GAME_WIDTH - 48, useAdvancedWrap: true },
+        strokeThickness: 3,
+        wordWrap: { width: GAME_WIDTH - 56, useAdvancedWrap: true },
       }))
       .setOrigin(0, 0.5);
 
@@ -72,12 +76,13 @@ export class GameplayBottomToast {
     const panelW = Math.max(GAMEPLAY_TOAST.panelMinWidth, contentW + GAMEPLAY_TOAST.panelPadX * 2);
     const panelH = GAMEPLAY_TOAST.panelHeight;
     const panelLeft = cx - panelW / 2;
+    const panelRadius = GAMEPLAY_TOAST.panelRadius;
 
     const panel = this.scene.add.graphics();
     panel.fillStyle(0x0a1824, GAMEPLAY_TOAST.panelAlpha);
-    panel.fillRoundedRect(panelLeft, cy - panelH / 2, panelW, panelH, 14);
-    panel.lineStyle(1.5, 0xffffff, 0.18);
-    panel.strokeRoundedRect(panelLeft, cy - panelH / 2, panelW, panelH, 14);
+    panel.fillRoundedRect(panelLeft, cy - panelH / 2, panelW, panelH, panelRadius);
+    panel.lineStyle(2, 0xffffff, 0.28);
+    panel.strokeRoundedRect(panelLeft, cy - panelH / 2, panelW, panelH, panelRadius);
 
     const contentLeft = panelLeft + (panelW - contentW) / 2;
     if (icon) {
@@ -93,10 +98,6 @@ export class GameplayBottomToast {
     root.add(children);
     this.root = root;
     this.scene.children.bringToTop(root);
-
-    const fadeInMs = GAMEPLAY_TOAST.fadeInMs;
-    const fadeOutMs = GAMEPLAY_TOAST.fadeOutMs;
-    const holdMs = Math.max(0, durationMs - fadeInMs - fadeOutMs);
 
     this.scene.tweens.add({
       targets: root,

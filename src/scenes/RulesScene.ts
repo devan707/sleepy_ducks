@@ -3,6 +3,7 @@ import { MusicManager } from '../audio/MusicManager';
 import { loadGameAssets } from '../assets/GameAssetLoader';
 import { ASSET_KEYS } from '../config/assets';
 import { addComboRulesPreview } from '../ui/ComboRulesPreview';
+import { MOONFLOWER_ATLAS_KEYS } from '../config/moonflowerAssets';
 import {
   BALLOON,
   COLORS,
@@ -25,7 +26,7 @@ const BODY_X = PAD_X + IMAGE_COLUMN_W + 8;
 const BODY_W = GAME_WIDTH - BODY_X - PAD_X;
 const SCROLL_BOTTOM_PAD = 28;
 
-type RuleVisual = 'normal' | 'heavy' | 'golden' | 'balloon' | 'decoy' | 'combo';
+type RuleVisual = 'normal' | 'heavy' | 'golden' | 'balloon' | 'decoy' | 'combo' | 'moonflower';
 
 type RuleSection = {
   title: string;
@@ -73,6 +74,13 @@ const SECTIONS: RuleSection[] = [
     visual: 'decoy',
   },
   {
+    title: 'Moonflower charm',
+    body: 'After sunset, a glowing moonflower blooms on the left cliff — tap it before the run ends. Each one adds to your charms in Settings (×2, ×3, and so on across runs). A hint appears as night falls if you have not collected it yet.',
+    imageKey: MOONFLOWER_ATLAS_KEYS.sway,
+    visual: 'moonflower',
+    frame: 'frame_000',
+  },
+  {
     title: 'Empty taps',
     body: 'Tapping empty space (not the settings gear or other UI) is a bad tap — you’ll hear a quick whiff/sploosh, see a yellow X, and lose your combo. Aim carefully!',
   },
@@ -87,6 +95,7 @@ function fitDisplaySize(sprite: Phaser.GameObjects.Image, targetHeight: number):
 function rulesImageHeight(visual?: RuleVisual): number {
   if (visual === 'balloon') return RULES_BALLOON_HEIGHT;
   if (visual === 'combo') return 0;
+  if (visual === 'moonflower') return 52;
   let h = RULES_DUCK_HEIGHT;
   if (visual === 'heavy') h *= DUCK_KIND_VISUAL.heavy.scaleMult;
   if (visual === 'golden') h *= DUCK_KIND_VISUAL.golden.scaleMult;

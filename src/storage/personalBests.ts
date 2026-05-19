@@ -1,5 +1,6 @@
 import type { RunStats } from '../models/RunStats';
 import { formatSurvivalTime } from '../models/RunStats';
+import { COLORS } from '../config/gameConfig';
 
 const BESTS_KEY = 'sleeping-ducks-personal-bests';
 const LEGACY_BOARD_KEY = 'sleeping-ducks-leaderboard';
@@ -25,25 +26,25 @@ export const PERSONAL_STAT_CARDS: PersonalStatDisplay[] = [
   {
     key: 'bestScore',
     label: 'Best score',
-    fill: 0x2a6a8a,
+    fill: COLORS.waterLight,
     format: (b) => (b.bestScore > 0 ? b.bestScore.toLocaleString() : '—'),
   },
   {
     key: 'longestTimeMs',
     label: 'Longest float',
-    fill: 0x2f7d9a,
+    fill: COLORS.waterMid,
     format: (b) => (b.longestTimeMs > 0 ? formatSurvivalTime(b.longestTimeMs) : '—'),
   },
   {
     key: 'mostDucksSaved',
     label: 'Most saved',
-    fill: 0x2d7a6e,
+    fill: COLORS.mossLight,
     format: (b) => (b.mostDucksSaved > 0 ? String(b.mostDucksSaved) : '—'),
   },
   {
     key: 'longestCombo',
     label: 'Best combo',
-    fill: 0x8a6a2a,
+    fill: COLORS.rock,
     format: (b) => (b.longestCombo > 0 ? String(b.longestCombo) : '—'),
   },
 ];

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ASSET_KEYS } from '../config/assets';
-import { GAME_HEIGHT, GAME_WIDTH, HUD_LAYOUT } from '../config/gameConfig';
+import { GAME_HEIGHT, GAME_WIDTH, HUD_LAYOUT, HUD_TOP_PADDING } from '../config/gameConfig';
 import { createCartoonGearIcon } from './CartoonGearIcon';
 import { SettingsDrawer } from './SettingsDrawer';
 
@@ -13,6 +13,15 @@ export function getDefaultSettingsButtonPosition(): { x: number; y: number } {
   return {
     x: GAME_WIDTH - INSET_RIGHT - RADIUS,
     y: GAME_HEIGHT - HUD_LAYOUT.marginBottom - RADIUS,
+  };
+}
+
+/** Title menu — top-right, inset from safe area. */
+export function getMenuSettingsButtonPosition(): { x: number; y: number } {
+  const inset = 20;
+  return {
+    x: GAME_WIDTH - inset - RADIUS,
+    y: HUD_TOP_PADDING + RADIUS + 6,
   };
 }
 

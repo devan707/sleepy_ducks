@@ -15,7 +15,7 @@ const LEGEND = [
   'L — left cliff align (pause)',
   '  Arrows move · +/- height · [/] width · E export',
   'W — watch mode (no life loss)',
-  '  P pause time · , +5s · . +15s',
+  '  P pause time · , +5s · . +15s · H hide help',
   '?watch=1 — start in watch mode',
   '?calibrate=1 — lip · flow · cliff',
   'Magenta = lip · Green = duck clip',

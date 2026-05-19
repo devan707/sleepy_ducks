@@ -55,9 +55,11 @@ import {
 import { DevControlsLegend } from '../dev/DevControlsLegend';
 import { isDevMode } from '../dev/isDevMode';
 import { isWatchModeActive, resetWatchMode } from '../dev/watchMode';
+import { isWatchInstructionsVisible } from '../dev/watchInstructions';
 
 type BadTapKind = 'empty' | 'decoy';
 import { isWatchTimePaused, resetWatchTime } from '../dev/watchTime';
+import { resetWatchInstructions } from '../dev/watchInstructions';
 import { WatchModeControls } from '../dev/WatchModeControls';
 import { clearEnvironmentGeometryOverride } from '../config/environmentGeometry';
 import { DifficultyManager } from '../systems/DifficultyManager';
@@ -213,8 +215,11 @@ export class GameScene extends Phaser.Scene {
     if (isDevMode()) {
       this.devLegend = new DevControlsLegend(this);
       this.watchModeControls = new WatchModeControls(this, {
-        onChange: (active) => {
-          if (active) this.devLegend?.setVisible(true);
+        onChange: () => {
+          this.syncWatchHelpUi();
+        },
+        onInstructionsVisibleChange: () => {
+          this.syncWatchHelpUi();
         },
         onSkipTime: (deltaSec) => {
           this.difficulty.skipElapsedSeconds(deltaSec);
@@ -295,6 +300,12 @@ export class GameScene extends Phaser.Scene {
     this.freezeDucks();
     this.stage.setCalibrationVisuals(true);
     this.devLegend?.setVisible(true);
+  }
+
+  private syncWatchHelpUi(): void {
+    if (!isDevMode()) return;
+    const show = isWatchModeActive() && isWatchInstructionsVisible();
+    this.devLegend?.setVisible(show);
   }
 
   private applyCalibrationResume(): void {
@@ -598,7 +609,7 @@ export class GameScene extends Phaser.Scene {
     this.hud.setMoonflowerCollectedThisRun(true, false);
   }
 
-  /** Seven seconds before sunset — remind players about the night charm. */
+  /** Fourteen seconds before sunset — remind players about the night charm. */
   private tryMoonflowerSunsetHint(): void {
     if (this.moonflowerHintShown || this.calibrationMode) return;
     if (this.moonflowerController.isCollectedThisRun()) return;
@@ -842,6 +853,7 @@ export class GameScene extends Phaser.Scene {
     this.watchModeControls = null;
     resetWatchMode();
     resetWatchTime();
+    resetWatchInstructions();
     this.moonflowerController?.destroy();
     this.spawner?.destroy();
     this.settingsDrawer?.destroy();

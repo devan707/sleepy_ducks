@@ -1,14 +1,13 @@
 import Phaser from 'phaser';
 import type { MusicManager } from '../audio/MusicManager';
 import type { SoundManager } from '../audio/SoundManager';
-import { GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
+import { COLORS, GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
 import {
   getPersonalBests,
   hasAnyPersonalBests,
   PERSONAL_STAT_CARDS,
 } from '../storage/personalBests';
 import { getMusicVolume, getSfxVolume } from '../storage/audioSettings';
-import { getCharmCount } from '../storage/charms';
 import { CharmsGrid } from './CharmsGrid';
 import {
   createBubbleStatCard,
@@ -16,7 +15,7 @@ import {
   drawBubbleRect,
   SettingsDrawerSuppress,
 } from './bubbleChrome';
-import { captionTextStyle, outlinedTextStyle, titleTextStyle } from './uiChrome';
+import { outlinedTextStyle, settingsLabelTextStyle, titleTextStyle, UI_CHROME } from './uiChrome';
 import {
   hidePlayerNameOverlay,
   showPlayerNameOverlay,
@@ -24,6 +23,15 @@ import {
 } from './playerNameOverlay';
 
 const DRAWER_W = 318;
+const SETTINGS_GOLD = 0xffe566;
+/** Settings panel shell — true blue (not pastel sky). */
+const SETTINGS_PANEL_BLUE = 0x3d7ec8;
+const SETTINGS_PANEL_BLUE_INNER = 0x3578be;
+/** Name + volume row bubbles — brighter blue. */
+const SETTINGS_BRIGHT_BLUE = 0x5eb4ea;
+const SETTINGS_PRIMARY_GREEN = COLORS.moss;
+/** Charms section header — lighter/brighter than cliff moss. */
+const SETTINGS_CHARMS_GREEN = 0x9ef8b0;
 const PANEL_X_CLOSED = GAME_WIDTH + 4;
 const PANEL_X_OPEN = GAME_WIDTH - DRAWER_W;
 
@@ -162,15 +170,15 @@ export class SettingsDrawer {
 
   private buildPanel(): void {
     const panelBg = this.scene.add.graphics();
-    panelBg.fillStyle(0x1a5f7a, 0.96);
+    panelBg.fillStyle(SETTINGS_PANEL_BLUE, 0.98);
     panelBg.fillRoundedRect(0, 0, DRAWER_W, GAME_HEIGHT, { tl: 22, bl: 22, tr: 0, br: 0 });
     drawBubbleRect(panelBg, 6, 8, DRAWER_W - 12, GAME_HEIGHT - 16, {
-      fill: 0x2d7a9a,
-      fillAlpha: 0.55,
+      fill: SETTINGS_PANEL_BLUE_INNER,
+      fillAlpha: 0.5,
       radius: 20,
       highlight: false,
     });
-    panelBg.lineStyle(4, 0xffffff, 0.5);
+    panelBg.lineStyle(4, SETTINGS_GOLD, 0.92);
     panelBg.strokeRoundedRect(0, 0, DRAWER_W, GAME_HEIGHT, { tl: 22, bl: 22, tr: 0, br: 0 });
 
     const panelHit = this.scene.add
@@ -183,8 +191,8 @@ export class SettingsDrawer {
 
     const title = this.scene.add
       .text(28, 48, 'Settings', {
-        ...titleTextStyle({ fontSize: '26px', color: '#ffe566' }),
-        stroke: '#0a1620',
+        ...titleTextStyle({ fontSize: '26px', color: UI_CHROME.accentGold }),
+        stroke: UI_CHROME.ink,
         strokeThickness: 7,
       })
       .setOrigin(0, 0);
@@ -202,9 +210,12 @@ export class SettingsDrawer {
     });
 
     const nameBubble = this.scene.add.graphics();
-    drawBubbleRect(nameBubble, 24, 100, DRAWER_W - 48, 52, { fill: 0x3a8cad, radius: 16 });
+    drawBubbleRect(nameBubble, 24, 100, DRAWER_W - 48, 52, {
+      fill: SETTINGS_BRIGHT_BLUE,
+      radius: 16,
+    });
     const nameLabel = this.scene.add
-      .text(40, 112, 'YOUR NAME', captionTextStyle({ fontSize: '10px', letterSpacing: 2 }))
+      .text(40, 112, 'YOUR NAME', settingsLabelTextStyle({ fontSize: '11px', letterSpacing: 2 }))
       .setOrigin(0, 0);
 
     const musicRow = createBubbleVolumeSlider(this.scene, {
@@ -213,6 +224,7 @@ export class SettingsDrawer {
       width: DRAWER_W - 48,
       height: 64,
       label: 'Music volume',
+      backgroundFill: SETTINGS_BRIGHT_BLUE,
       initial01: getMusicVolume(),
       onChange: (volume) => {
         this.opts.musicManager.setMusicVolume(volume);
@@ -231,6 +243,7 @@ export class SettingsDrawer {
       width: DRAWER_W - 48,
       height: 64,
       label: 'Sound effects',
+      backgroundFill: SETTINGS_BRIGHT_BLUE,
       initial01: getSfxVolume(),
       onChange: (volume) => {
         this.opts.soundManager.setSfxVolume(volume);
@@ -246,15 +259,14 @@ export class SettingsDrawer {
 
     const bestsTitleBubble = this.scene.add.graphics();
     drawBubbleRect(bestsTitleBubble, 24, 318, DRAWER_W - 48, 36, {
-      fill: 0xffe566,
-      fillAlpha: 0.35,
+      fill: SETTINGS_PRIMARY_GREEN,
+      fillAlpha: 0.9,
       radius: 14,
     });
     const bestsTitle = this.scene.add
-      .text(DRAWER_W / 2, 336, 'YOUR PERSONAL BESTS', captionTextStyle({
+      .text(DRAWER_W / 2, 336, 'YOUR PERSONAL BESTS', settingsLabelTextStyle({
         fontSize: '11px',
         letterSpacing: 2,
-        color: '#fff8d0',
       }))
       .setOrigin(0.5);
 
@@ -296,30 +308,43 @@ export class SettingsDrawer {
 
   private buildCharmsSection(): Phaser.GameObjects.GameObject[] {
     const charmsY = 638;
-    const titleBubble = this.scene.add.graphics();
-    drawBubbleRect(titleBubble, 24, charmsY, DRAWER_W - 48, 32, {
-      fill: 0xa8e8ff,
-      fillAlpha: 0.28,
-      radius: 14,
-    });
+    const glowW = DRAWER_W - 48;
+    const glowH = 44;
+    const glowX = 24;
+    const glow = this.createCharmsGlow(glowX, charmsY, glowW, glowH);
     const title = this.scene.add
-      .text(DRAWER_W / 2, charmsY + 16, 'CHARMS', captionTextStyle({
-        fontSize: '11px',
+      .text(DRAWER_W / 2, charmsY + 22, 'CHARMS', settingsLabelTextStyle({
+        fontSize: '14px',
         letterSpacing: 2,
-        color: '#d8f4ff',
       }))
       .setOrigin(0.5);
 
-    const hint = this.scene.add
-      .text(DRAWER_W / 2, charmsY + 148, '', outlinedTextStyle({
-        fontSize: '12px',
-        color: '#c8e8f8',
-        align: 'center',
-      }))
-      .setOrigin(0.5)
-      .setName('charms-hint');
+    return [glow, title];
+  }
 
-    return [titleBubble, title, hint];
+  /** Soft green radiance behind the charms header (no pill chrome). */
+  private createCharmsGlow(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): Phaser.GameObjects.Graphics {
+    const g = this.scene.add.graphics();
+    g.setBlendMode(Phaser.BlendModes.ADD);
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    const green = SETTINGS_CHARMS_GREEN;
+
+    g.fillStyle(green, 0.04);
+    g.fillEllipse(cx, cy, w * 1.05, h * 2.4);
+    g.fillStyle(green, 0.07);
+    g.fillEllipse(cx, cy, w * 0.88, h * 1.75);
+    g.fillStyle(green, 0.11);
+    g.fillEllipse(cx, cy, w * 0.62, h * 1.15);
+    g.fillStyle(green, 0.08);
+    g.fillEllipse(cx, cy, w * 0.38, h * 0.62);
+
+    return g;
   }
 
   private refreshCharmsSection(): void {
@@ -338,16 +363,6 @@ export class SettingsDrawer {
     });
     this.panel.add(grid);
     this.charmsNodes.push(grid);
-
-    const hint = this.panel.getByName('charms-hint') as Phaser.GameObjects.Text | null;
-    if (hint) {
-      const total = getCharmCount('moonflower');
-      hint.setText(
-        total > 0
-          ? `Moonflowers in chest: ${total}\nCollect another after sunset each run`
-          : 'After sunset each run, a Moonflower\nblooms on the left cliff',
-      );
-    }
   }
 
   private resumeMusicContext(): void {

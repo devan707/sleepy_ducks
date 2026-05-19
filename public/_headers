@@ -13,6 +13,18 @@
 /apple-touch-icon.png
   Cache-Control: public, max-age=86400
 
+/icon-192.png
+  Cache-Control: public, max-age=86400
+
+/icon-512.png
+  Cache-Control: public, max-age=86400
+
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/site.webmanifest
+  Cache-Control: public, max-age=86400
+
 /index.html
   Cache-Control: public, max-age=0, must-revalidate
 

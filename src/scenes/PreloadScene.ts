@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { AssetManager } from '../assets/AssetManager';
 import { finalizeGameAssets, queueGameAssets } from '../assets/GameAssetLoader';
 import { FallbackTextures } from '../assets/FallbackTextures';
+import { MusicManager } from '../audio/MusicManager';
 import {
   MENU_MANIFEST,
   type AssetKey,
@@ -11,7 +12,6 @@ import { COLORS, GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfi
 import { LoadingBar } from '../ui/LoadingBar';
 
 const DEPTH = {
-  backdrop: 0,
   bar: 1,
   text: 2,
 } as const;
@@ -67,6 +67,9 @@ export class PreloadScene extends Phaser.Scene {
 
     this.loadingBar.setProgress(1);
     this.statusText.setText('Ready!');
+    this.input.on('pointerdown', () => {
+      MusicManager.getInstance().tryUnlock();
+    });
     this.time.delayedCall(80, () => {
       this.scene.start(SCENE_KEYS.menu);
     });
@@ -76,23 +79,23 @@ export class PreloadScene extends Phaser.Scene {
     const cx = GAME_WIDTH / 2;
     const barY = GAME_HEIGHT * 0.58;
 
-    const backdrop = this.add.graphics().setDepth(DEPTH.backdrop);
-    backdrop.fillStyle(0x061820, 0.72);
-    backdrop.fillRoundedRect(cx - 176, barY - 92, 352, 184, 22);
-    backdrop.lineStyle(3, 0xffffff, 0.18);
-    backdrop.strokeRoundedRect(cx - 176, barY - 92, 352, 184, 22);
-
     this.loadingBar = new LoadingBar(this, cx, barY);
     this.loadingBar.setDepth(DEPTH.bar);
 
     this.statusText = this.add
       .text(cx, barY - 72, 'Loading…', {
         fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '22px',
+        fontSize: '26px',
         fontStyle: 'bold',
         color: '#ffffff',
-        stroke: '#061820',
-        strokeThickness: 5,
+        shadow: {
+          offsetX: 0,
+          offsetY: 3,
+          color: '#061820',
+          blur: 8,
+          stroke: true,
+          fill: true,
+        },
       })
       .setOrigin(0.5)
       .setDepth(DEPTH.text);

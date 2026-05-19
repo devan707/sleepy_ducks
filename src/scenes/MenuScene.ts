@@ -4,7 +4,7 @@ import { loadGameAssets } from '../assets/GameAssetLoader';
 import { ASSET_KEYS } from '../config/assets';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
-import { SettingsButton } from '../ui/SettingsButton';
+import { SettingsButton, getMenuSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
 import { FloatingAnimButton } from '../ui/FloatingAnimButton';
 import {
@@ -17,6 +17,11 @@ import {
 import { GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
 import { formatSurvivalTime } from '../models/RunStats';
 import { getHighScore, getLongestTimeMs } from '../storage/highScore';
+import { onInstallPromptReady } from '../pwa/installPrompt';
+import {
+  hideInstallPromptBanner,
+  showInstallPromptBanner,
+} from '../ui/installPromptBanner';
 
 const DEPTH = {
   bg: 0,
@@ -37,6 +42,8 @@ export class MenuScene extends Phaser.Scene {
   private playButton!: FloatingAnimButton;
   private gameReady = false;
   private starting = false;
+  private installPromptUnsub: (() => void) | null = null;
+  private installPromptTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor() {
     super(SCENE_KEYS.menu);
@@ -59,6 +66,7 @@ export class MenuScene extends Phaser.Scene {
     this.settingsButton = new SettingsButton(this, {
       drawer: this.settingsDrawer,
       depth: DEPTH.ui + 5,
+      ...getMenuSettingsButtonPosition(),
     });
     if (this.textures.exists(ASSET_KEYS.uiGear)) {
       this.settingsButton.refreshGearGraphic();
@@ -73,6 +81,7 @@ export class MenuScene extends Phaser.Scene {
     this.setupInput();
     this.playEntrance();
     this.gameReady = AssetManager.hasRealGameplayArt();
+    this.scheduleInstallPrompt();
   }
 
   private createBackground(): void {
@@ -235,7 +244,26 @@ export class MenuScene extends Phaser.Scene {
     this.playButton.playEntrance(this, 200);
   }
 
+  private scheduleInstallPrompt(): void {
+    this.clearInstallPromptSchedule();
+    this.installPromptTimer = this.time.delayedCall(900, () => {
+      showInstallPromptBanner();
+    });
+    this.installPromptUnsub = onInstallPromptReady(() => {
+      showInstallPromptBanner();
+    });
+  }
+
+  private clearInstallPromptSchedule(): void {
+    this.installPromptTimer?.remove(false);
+    this.installPromptTimer = null;
+    this.installPromptUnsub?.();
+    this.installPromptUnsub = null;
+  }
+
   shutdown(): void {
+    this.clearInstallPromptSchedule();
+    hideInstallPromptBanner();
     this.settingsDrawer?.destroy();
     this.settingsButton?.destroy();
     this.playButton?.destroy();

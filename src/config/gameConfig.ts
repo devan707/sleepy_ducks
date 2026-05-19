@@ -58,8 +58,8 @@ export const STAGE = {
   hudDepth: 100,
   /** Combo meter — above base HUD, below toasts. */
   depthComboHud: 101,
-  /** Bottom gameplay toasts — above HUD, combo, and settings gear. */
-  depthGameplayToast: 115,
+  /** Bottom gameplay toasts — above combo meter and HUD. */
+  depthGameplayToast: 120,
   /** Heart balloon floats above gameplay ducks. */
   balloonDepth: 90,
   /** Moonflower collectible on the left cliff. */
@@ -201,7 +201,7 @@ export const BALLOON = {
 } as const;
 
 export const COMBO_UI = {
-  y: GAME_HEIGHT - 129,
+  y: GAME_HEIGHT - 108,
   width: 207,
   height: 107,
   radius: 25,
@@ -288,30 +288,28 @@ export function getSunsetElapsedSec(): number {
 
 /** Bottom-screen toast panels (moonflower hint, rewards, etc.). */
 export const GAMEPLAY_TOAST = {
-  panelAlpha: 0.72,
-  durationMs: 1500,
-  fadeInMs: 120,
-  fadeOutMs: 200,
-  panelMinWidth: 260,
-  panelHeight: 64,
-  panelPadX: 14,
-  imageSize: 36,
-  imageGap: 10,
-  /** Gap between combo panel bottom and toast top. */
-  gapBelowCombo: 10,
+  panelAlpha: 0.84,
+  fadeInMs: 1000,
+  holdMs: 2000,
+  fadeOutMs: 1000,
+  /** Raise toasts above the combo panel center. */
+  yOffsetAboveCombo: 32,
+  panelMinWidth: 320,
+  panelHeight: 100,
+  panelPadX: 22,
+  panelRadius: 18,
+  imageSize: 54,
+  imageGap: 14,
+  fontSize: '19px',
 } as const;
 
-/** Y center for bottom toasts — sits just under the combo meter slot. */
+/** Y center for bottom toasts — layered over the combo panel. */
 export function getGameplayToastY(): number {
-  const { gapBelowCombo, panelHeight } = GAMEPLAY_TOAST;
-  const comboBottom = COMBO_UI.y + COMBO_UI.height / 2;
-  const idealY = comboBottom + gapBelowCombo + panelHeight / 2;
-  const screenMax = GAME_HEIGHT - panelHeight / 2 - 8;
-  return Math.min(idealY, screenMax);
+  return COMBO_UI.y - GAMEPLAY_TOAST.yOffsetAboveCombo;
 }
 
 export const MOONFLOWER_HINT = {
-  secBeforeSunset: 7,
+  secBeforeSunset: 14,
 } as const;
 
 export function getMoonflowerHintAtSec(): number {
