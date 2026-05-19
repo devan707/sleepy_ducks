@@ -341,7 +341,7 @@ export class DayNightCycle {
       this.twilightStartSec !== null ? elapsedSec - this.twilightStartSec : 0;
 
     if (
-      afterSunset >= DAY_NIGHT.musicCrossfadeDelaySec &&
+      elapsedSec >= DAY_NIGHT.musicCrossfadeAtSec &&
       !this.musicCrossfadeEmitted
     ) {
       this.musicCrossfadeEmitted = true;

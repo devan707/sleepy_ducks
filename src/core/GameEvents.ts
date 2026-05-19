@@ -11,7 +11,7 @@ export const GameEvents = {
   GAME_OVER: 'game-over',
   /** Sun has set behind the crest — twilight begins. */
   SUNSET: 'sunset',
-  /** Delayed after sunset — crossfade to night gameplay music (~15s after sun dips). */
+  /** At 45s elapsed — crossfade from day gameplay music to night track. */
   MUSIC_NIGHT_CROSSFADE: 'music-night-crossfade',
   /** First frame stars become visible this run (night). */
   STARS_VISIBLE: 'stars-visible',

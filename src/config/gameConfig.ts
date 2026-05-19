@@ -196,9 +196,9 @@ export const DAY_NIGHT = {
   nightPurpleBottomAlpha: 0.2,
   /** How quickly the purple wash fades in after sunset (seconds). */
   nightPurpleFadeInSec: 14,
-  /** Wait this long after visual sunset before gameplay music crossfade. */
-  musicCrossfadeDelaySec: 15,
-  /** Overlap duration: day track out, night track in. */
+  /** Game elapsed seconds when day music fades out and night music fades in. */
+  musicCrossfadeAtSec: 45,
+  /** Crossfade duration (day out, night in). */
   gameplayMusicCrossfadeMs: 5000,
   sunDisplayHeight: 96,
   /** Screen X for sun path (right side of sky). */
