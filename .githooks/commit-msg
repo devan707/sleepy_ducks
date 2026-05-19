@@ -1,0 +1,10 @@
+#!/bin/sh
+# Reject empty commit messages (terminal commits). Strip comments and blank lines.
+msg=$(grep -v '^#' "$1" | sed '/^[[:space:]]*$/d' | head -1)
+if [ -z "$msg" ]; then
+  echo >&2
+  echo "Empty commit message — commit aborted." >&2
+  echo "Type a message in the Source Control box, or run: git commit -m \"your message\"" >&2
+  echo >&2
+  exit 1
+fi

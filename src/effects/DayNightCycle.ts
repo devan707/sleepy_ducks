@@ -137,7 +137,6 @@ export class DayNightCycle {
   private starVisibility = 0;
   private starsVisibleEmitted = false;
   private sunsetEmitted = false;
-  private musicCrossfadeEmitted = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -333,20 +332,11 @@ export class DayNightCycle {
     if (elapsedSec <= 0) {
       this.twilightStartSec = null;
       this.sunsetEmitted = false;
-      this.musicCrossfadeEmitted = false;
       this.heldSunsetWarmth = 0;
     }
 
     const afterSunset =
       this.twilightStartSec !== null ? elapsedSec - this.twilightStartSec : 0;
-
-    if (
-      elapsedSec >= DAY_NIGHT.musicCrossfadeAtSec &&
-      !this.musicCrossfadeEmitted
-    ) {
-      this.musicCrossfadeEmitted = true;
-      this.scene.events.emit(GameEvents.MUSIC_NIGHT_CROSSFADE);
-    }
 
     const nightT = smoothstep(afterSunset / nightFadeInSec);
     const phases = computeNightPhases(nightT);

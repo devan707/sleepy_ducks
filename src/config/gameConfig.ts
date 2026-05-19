@@ -196,10 +196,14 @@ export const DAY_NIGHT = {
   nightPurpleBottomAlpha: 0.2,
   /** How quickly the purple wash fades in after sunset (seconds). */
   nightPurpleFadeInSec: 14,
-  /** Game elapsed seconds when day music fades out and night music fades in. */
-  musicCrossfadeAtSec: 45,
-  /** Crossfade duration (day out, night in). */
-  gameplayMusicCrossfadeMs: 5000,
+  /** Daytime music fade window (game elapsed seconds). */
+  gameplayDayMusicFadeOutStartSec: 40,
+  gameplayDayMusicFadeOutEndSec: 48,
+  /** Night music fade-in window (game elapsed seconds). */
+  gameplayNightMusicFadeInStartSec: 45,
+  gameplayNightMusicFadeInEndSec: 50,
+  /** Night track begins at this offset (seconds into the loop). */
+  gameplayNightStartSec: 32,
   sunDisplayHeight: 96,
   /** Screen X for sun path (right side of sky). */
   sunX: GAME_WIDTH * 0.68,

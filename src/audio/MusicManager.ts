@@ -21,7 +21,8 @@ export class MusicManager {
   private activeTrack: MusicTrack | null = null;
   private musicEnabled = isMusicEnabled();
   private gameplayNightCrossfaded = false;
-  private crossfadeRaf: number | null = null;
+  private gameplayMusicTimelineActive = false;
+  private nightTrackStarted = false;
 
   private constructor() {
     this.clips = {
@@ -60,8 +61,42 @@ export class MusicManager {
     return clip;
   }
 
+  private getTrackStartSec(track: MusicTrack): number {
+    if (track === 'gameplayNight') return DAY_NIGHT.gameplayNightStartSec;
+    return 0;
+  }
+
+  private seekTrackToStart(clip: HTMLAudioElement, track: MusicTrack): void {
+    const startSec = this.getTrackStartSec(track);
+    if (startSec <= 0) {
+      clip.currentTime = 0;
+      return;
+    }
+    const { duration } = clip;
+    if (Number.isFinite(duration) && duration > startSec) {
+      clip.currentTime = startSec;
+    } else {
+      clip.currentTime = startSec;
+    }
+  }
+
+  private fadeT(elapsedSec: number, startSec: number, endSec: number): number {
+    if (elapsedSec <= startSec) return 0;
+    if (elapsedSec >= endSec) return 1;
+    return (elapsedSec - startSec) / (endSec - startSec);
+  }
+
+  private isManagingGameplayCrossfade(): boolean {
+    return this.gameplayMusicTimelineActive && !this.gameplayNightCrossfaded;
+  }
+
+  private resetGameplayCrossfadeState(): void {
+    this.gameplayMusicTimelineActive = false;
+    this.nightTrackStarted = false;
+  }
+
   private applyClipVolumes(): void {
-    if (this.crossfadeRaf !== null) return;
+    if (this.isManagingGameplayCrossfade()) return;
     const volume = getMusicVolume();
     for (const clip of Object.values(this.clips)) {
       clip.volume = volume;
@@ -93,7 +128,7 @@ export class MusicManager {
     setMusicEnabled(enabled);
     this.applyClipVolumes();
     if (!this.musicEnabled) {
-      this.cancelCrossfade();
+      this.resetGameplayCrossfadeState();
       this.pauseAll();
       this.activeTrack = null;
       return;
@@ -128,94 +163,91 @@ export class MusicManager {
   }
 
   playMenuUi(): void {
-    this.cancelCrossfade();
+    this.resetGameplayCrossfadeState();
     this.gameplayNightCrossfaded = false;
     this.play('menuUi');
   }
 
   playGameplay(): void {
-    this.cancelCrossfade();
+    this.resetGameplayCrossfadeState();
     this.gameplayNightCrossfaded = false;
     this.play('gameplay');
   }
 
   /**
-   * Crossfade at sunset: day track out, night track in (loops).
-   * Night clip must start at volume 0 — clips default to full music volume.
+   * Drive day→night music from game elapsed time (pauses with gameplay).
+   * Day: full → fade out 40s–48s. Night: fade in 45s–50s from loop offset.
    */
-  crossfadeGameplayToNight(): void {
-    if (this.gameplayNightCrossfaded || !this.musicEnabled) return;
-    this.gameplayNightCrossfaded = true;
-    this.cancelCrossfade();
+  updateGameplayMusicCrossfade(elapsedSec: number): void {
+    if (!this.musicEnabled || this.gameplayNightCrossfaded) return;
+    if (this.activeTrack !== 'gameplay' && !this.gameplayMusicTimelineActive) return;
+
+    const {
+      gameplayDayMusicFadeOutStartSec: dayStart,
+      gameplayDayMusicFadeOutEndSec: dayEnd,
+      gameplayNightMusicFadeInStartSec: nightStart,
+      gameplayNightMusicFadeInEndSec: nightEnd,
+    } = DAY_NIGHT;
+
+    if (elapsedSec < dayStart) return;
+
+    this.gameplayMusicTimelineActive = true;
 
     const from = this.clips.gameplay;
     const to = this.clips.gameplayNight;
     const targetVol = getMusicVolume();
+    const dayFade = this.fadeT(elapsedSec, dayStart, dayEnd);
+    const dayVol = targetVol * (1 - dayFade);
 
-    const startCrossfade = () => {
-      if (!this.musicEnabled || !this.gameplayNightCrossfaded) return;
-
-      to.pause();
-      to.currentTime = 0;
-      to.volume = 0;
-      from.volume = targetVol;
-
-      if (from.paused || from.ended) {
+    if (dayFade >= 1) {
+      from.pause();
+      from.currentTime = 0;
+      from.volume = 0;
+    } else {
+      from.volume = dayVol;
+      if (from.paused && dayVol > 0) {
         void from.play().catch(() => {
           /* Autoplay blocked until gesture. */
         });
       }
+    }
 
+    if (elapsedSec < nightStart) {
+      to.pause();
+      to.volume = 0;
+      return;
+    }
+
+    if (!this.nightTrackStarted) {
+      this.nightTrackStarted = true;
+      this.seekTrackToStart(to, 'gameplayNight');
+      to.volume = 0;
       void to.play().catch(() => {
         /* Autoplay blocked until gesture. */
       });
+    }
 
-      const t0 = performance.now();
-      const tick = () => {
-        if (!this.gameplayNightCrossfaded) return;
+    const nightFade = this.fadeT(elapsedSec, nightStart, nightEnd);
+    to.volume = targetVol * nightFade;
 
-        const t = Math.min(1, (performance.now() - t0) / DAY_NIGHT.gameplayMusicCrossfadeMs);
-        from.volume = targetVol * (1 - t);
-        to.volume = targetVol * t;
-
-        if (t < 1) {
-          this.crossfadeRaf = requestAnimationFrame(tick);
-        } else {
-          from.pause();
-          from.currentTime = 0;
-          from.volume = targetVol;
-          to.volume = targetVol;
-          this.crossfadeRaf = null;
-          this.activeTrack = 'gameplayNight';
-        }
-      };
-      this.crossfadeRaf = requestAnimationFrame(tick);
-    };
-
-    if (to.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-      startCrossfade();
-    } else {
-      to.addEventListener('canplay', startCrossfade, { once: true });
-      to.load();
+    if (nightFade >= 1) {
+      from.pause();
+      from.currentTime = 0;
+      from.volume = targetVol;
+      to.volume = targetVol;
+      this.activeTrack = 'gameplayNight';
+      this.gameplayNightCrossfaded = true;
+      this.resetGameplayCrossfadeState();
     }
   }
 
   playGameOver(): void {
-    this.cancelCrossfade();
+    this.resetGameplayCrossfadeState();
     this.gameplayNightCrossfaded = false;
     this.play('gameOver');
   }
 
-  private cancelCrossfade(): void {
-    if (this.crossfadeRaf !== null) {
-      cancelAnimationFrame(this.crossfadeRaf);
-      this.crossfadeRaf = null;
-    }
-  }
-
   private play(track: MusicTrack): void {
-    this.cancelCrossfade();
-
     const next = this.clips[track];
     const alreadyPlaying =
       this.activeTrack === track &&
@@ -238,7 +270,7 @@ export class MusicManager {
     }
 
     if (previousTrack !== track) {
-      next.currentTime = 0;
+      this.seekTrackToStart(next, track);
     }
 
     const startPlayback = () => {
@@ -260,14 +292,13 @@ export class MusicManager {
   }
 
   pauseAll(): void {
-    this.cancelCrossfade();
     for (const clip of Object.values(this.clips)) {
       clip.pause();
     }
   }
 
   stop(): void {
-    this.cancelCrossfade();
+    this.resetGameplayCrossfadeState();
     this.pauseAll();
     for (const clip of Object.values(this.clips)) {
       clip.currentTime = 0;

@@ -176,7 +176,6 @@ export class GameScene extends Phaser.Scene {
     this.events.on(GameEvents.DUCK_SAVED, this.onDuckSaved, this);
     this.events.on(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
     this.events.on(GameEvents.DECOY_TAPPED, this.onDecoyTapped, this);
-    this.events.on(GameEvents.MUSIC_NIGHT_CROSSFADE, this.onMusicNightCrossfade, this);
 
     this.scheduleHeartBalloons();
 
@@ -454,6 +453,7 @@ export class GameScene extends Phaser.Scene {
     const simDelta = watchPaused ? 0 : delta;
 
     this.stage.update(_time, simDelta, this.difficulty.elapsedSeconds);
+    this.musicManager.updateGameplayMusicCrossfade(this.difficulty.elapsedSeconds);
 
     if (this.calibrationMode || watchPaused || this.settingsPaused) return;
 
@@ -482,11 +482,6 @@ export class GameScene extends Phaser.Scene {
         this.resetCombo();
       }
     }
-  }
-
-  private onMusicNightCrossfade(): void {
-    if (this.isGameOver || this.calibrationMode) return;
-    this.musicManager.crossfadeGameplayToNight();
   }
 
   private onDuckSpawned(_duck: Duck): void {
@@ -614,7 +609,6 @@ export class GameScene extends Phaser.Scene {
     this.events.off(GameEvents.DUCK_SAVED, this.onDuckSaved, this);
     this.events.off(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
     this.events.off(GameEvents.DECOY_TAPPED, this.onDecoyTapped, this);
-    this.events.off(GameEvents.MUSIC_NIGHT_CROSSFADE, this.onMusicNightCrossfade, this);
     for (const balloon of this.activeBalloons) {
       balloon.destroy();
     }
