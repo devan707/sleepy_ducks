@@ -1,12 +1,16 @@
-import { SCORING } from '../config/gameConfig';
+import { COMBO, getComboMilestoneIndexReached, SCORING } from '../config/gameConfig';
 
-/** Streak multiplier — no bonus on the first save of a chain. */
+/** Streak multiplier — steps up only at combo milestones (see `COMBO.milestones`). */
 export function comboMultiplier(combo: number): number {
   if (combo <= 1) return 1;
-  return Math.min(
-    SCORING.comboMaxMult,
-    1 + (combo - 1) * SCORING.comboPerLevel,
-  );
+  const idx = getComboMilestoneIndexReached(combo);
+  if (idx < 0) return 1;
+  return COMBO.milestoneMultipliers[idx];
+}
+
+export function formatComboMultiplierLabel(combo: number): string {
+  const mult = comboMultiplier(combo);
+  return mult > 1 ? `×${mult.toFixed(1)} combo` : '';
 }
 
 /** Longer runs earn more per duck (linear ramp to cap). */

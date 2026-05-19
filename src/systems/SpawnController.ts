@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import {
   DECOY_SPAWN,
   DUCK,
-  DUCK_SPAWN_PROFILES,
   DIFFICULTY,
   GOLDEN_REWARD,
   type DuckKind,
@@ -12,6 +11,7 @@ import type { Duck } from '../objects/Duck';
 import { createDuck } from '../objects/DuckFactory';
 import type { StageLayout, WaterfallStage } from '../objects/WaterfallStage';
 import type { DifficultyManager } from './DifficultyManager';
+import { MallardSpawnMixer } from './MallardSpawnMixer';
 
 export type MallardSpawnPick = {
   sex: DuckSex;
@@ -27,6 +27,7 @@ export class SpawnController {
   private timer: Phaser.Time.TimerEvent | null = null;
   private decoyTimer: Phaser.Time.TimerEvent | null = null;
   private goldenTimer: Phaser.Time.TimerEvent | null = null;
+  private readonly mallardMixer = new MallardSpawnMixer();
 
   constructor(
     scene: Phaser.Scene,
@@ -43,6 +44,7 @@ export class SpawnController {
   }
 
   start(): void {
+    this.mallardMixer.reset();
     for (let i = 0; i < DIFFICULTY.initialSpawnCount; i++) {
       this.spawnMallard();
     }
@@ -173,17 +175,7 @@ export class SpawnController {
   }
 
   pickMallardSpawn(): MallardSpawnPick {
-    const mallardR = Math.random();
-    let acc = 0;
-    for (const profile of DUCK_SPAWN_PROFILES) {
-      acc += profile.weight;
-      if (mallardR < acc) {
-        return { sex: profile.sex, kind: profile.kind };
-      }
-    }
-
-    const last = DUCK_SPAWN_PROFILES[DUCK_SPAWN_PROFILES.length - 1];
-    return { sex: last.sex, kind: last.kind };
+    return this.mallardMixer.pick();
   }
 
   /** Bias toward screen-left; crest drift pushes ducks right as they rise. */

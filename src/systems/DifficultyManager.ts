@@ -234,14 +234,27 @@ export class DifficultyManager {
     return maxConcurrentByStep[maxConcurrentByStep.length - 1];
   }
 
-  /** Combo meter drain rate — slow at run start, faster as spawn interval tightens. */
-  getComboDrainMultiplier(): number {
+  /** Combo meter drain rate — generous window; eases slightly as streaks grow. */
+  getComboDrainMultiplier(combo: number): number {
     const { spawnIntervalByStep, minSpawnInterval } = DIFFICULTY;
-    const { drainMultAtStart, drainMultAtPeak } = COMBO;
+    const {
+      drainMultAtStart,
+      drainMultAtPeak,
+      streakDrainReliefPerLevel,
+      streakDrainReliefMax,
+    } = COMBO;
     const startInterval = spawnIntervalByStep[0];
     const current = this.getSpawnIntervalMs();
     const span = startInterval - minSpawnInterval;
     const t = span > 0 ? Phaser.Math.Clamp((startInterval - current) / span, 0, 1) : 1;
-    return Phaser.Math.Linear(drainMultAtStart, drainMultAtPeak, t);
+    const difficultyMult = Phaser.Math.Linear(drainMultAtStart, drainMultAtPeak, t);
+
+    const streakLevels = Math.max(0, combo - 2);
+    const streakRelief = Math.min(
+      streakDrainReliefMax,
+      streakLevels * streakDrainReliefPerLevel,
+    );
+
+    return difficultyMult * (1 - streakRelief);
   }
 }

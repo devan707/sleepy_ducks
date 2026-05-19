@@ -96,6 +96,16 @@ export const DUCK_SPAWN_PROFILES: readonly {
   { sex: 'female', kind: 'heavy', weight: 0.14 },
 ];
 
+/** Shuffled quota bag keeps long-run rates while reducing streaks. */
+export const DUCK_SPAWN = {
+  /** Mallards drawn per shuffled bag before refill. */
+  bagSize: 25,
+  /** Max heavy sleepers in a row within one bag (when mix allows). */
+  maxHeavyStreak: 2,
+  /** Max same-sex mallards in a row within one bag (when mix allows). */
+  maxSexStreak: 4,
+} as const;
+
 /** Decoys use a separate spawn clock — never mixed into the mallard schedule. */
 export const DECOY_SPAWN = {
   /** Decoys can spawn from run start. */
@@ -130,19 +140,33 @@ export const GOLDEN_EGG = {
 } as const;
 
 export const COMBO = {
-  /** Reference window — actual drain scales with spawn difficulty. */
-  baseTimeoutMs: 2000,
+  /** Reference window — actual drain scales gently with spawn difficulty. */
+  baseTimeoutMs: 2200,
   /** Drain multiplier at run start (lower = meter empties slower). */
-  drainMultAtStart: 0.5,
-  /** Drain multiplier when spawn rate is at peak. */
-  drainMultAtPeak: 1.45,
+  drainMultAtStart: 0.65,
+  /** Drain at peak spawn rate — kept close to start so late game stays chainable. */
+  drainMultAtPeak: 0.8,
+  /** Each combo level above 2 slightly slows drain (reward longer streaks). */
+  streakDrainReliefPerLevel: 0.005,
+  streakDrainReliefMax: 0.1,
   /** Combo counts that trigger a celebration sound + burst. */
-  milestones: [5, 10, 20, 30, 50] as const,
+  milestones: [5, 10, 20, 30, 50, 75, 100] as const,
+  /** Score multiplier unlocked at each milestone (same index as `milestones`). */
+  milestoneMultipliers: [1.5, 1.8, 2.2, 2.6, 3.2, 3.6, 4.0] as const,
 } as const;
 
 export type ComboMilestone = (typeof COMBO.milestones)[number];
 
-/** 0 = 5-combo … 4 = 50-combo; null if not a milestone. */
+/** Highest milestone tier reached (0 = 5 combo …); -1 if below first milestone. */
+export function getComboMilestoneIndexReached(combo: number): number {
+  let reached = -1;
+  for (let i = 0; i < COMBO.milestones.length; i++) {
+    if (combo >= COMBO.milestones[i]) reached = i;
+  }
+  return reached;
+}
+
+/** Exact hit on a milestone count — for fanfare / highlight (null if not a milestone). */
 export function getComboMilestoneTier(combo: number): number | null {
   const idx = COMBO.milestones.indexOf(combo as ComboMilestone);
   return idx >= 0 ? idx : null;
@@ -153,9 +177,6 @@ export const COMBO_TIMEOUT_MS = COMBO.baseTimeoutMs;
 
 /** Per-duck score multipliers (see `scoring/runScore.ts`). */
 export const SCORING = {
-  /** Added per combo level after the first save in a streak. */
-  comboPerLevel: 0.14,
-  comboMaxMult: 4,
   /** Seconds survived for +100% survival bonus (linear, capped). */
   survivalFullBonusSec: 150,
   survivalMaxMult: 2,

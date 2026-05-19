@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { comboMultiplier } from '../scoring/runScore';
+import { formatComboMultiplierLabel } from '../scoring/runScore';
 import {
   COMBO_UI,
   GAME_WIDTH,
@@ -21,6 +21,7 @@ export class ComboCounter {
   private labelText: Phaser.GameObjects.Text;
   private valueText: Phaser.GameObjects.Text;
   private multText: Phaser.GameObjects.Text;
+  private multFontBase = 0;
   private combo = 0;
   private visible = false;
 
@@ -52,13 +53,14 @@ export class ComboCounter {
         }),
       )
       .setOrigin(0.5);
+    this.multFontBase = Math.round(h * 0.17);
     this.multText = scene.add
       .text(
         0,
         h * 0.34,
         '',
         arcadeHudTextStyle({
-          fontSize: `${Math.round(h * 0.17)}px`,
+          fontSize: `${this.multFontBase}px`,
           color: '#ffdd55',
           stroke: '#5a3d08',
           strokeThickness: 4,
@@ -79,7 +81,7 @@ export class ComboCounter {
     const grew = combo > this.combo;
     this.combo = combo;
     this.valueText.setText(String(combo));
-    this.multText.setText(this.formatMultiplier(combo));
+    this.multText.setText(formatComboMultiplierLabel(combo));
 
     if (!this.visible) {
       this.show();
@@ -132,22 +134,21 @@ export class ComboCounter {
       ease: 'Back.easeOut',
     });
 
+    if (kind === 'milestone') {
+      this.highlightMultiplier(tier);
+    }
+
     this.spawnRingBurst(kind === 'start' ? 0 : tier + 1);
     if (kind === 'milestone' && tier >= 2) {
       this.spawnRingBurst(tier + 2, 90);
     }
-    if (tier >= 4) {
+    if (kind === 'milestone' && tier >= 4) {
       this.jiggleRoot();
     }
   }
 
   destroy(): void {
     this.root.destroy();
-  }
-
-  private formatMultiplier(combo: number): string {
-    const mult = comboMultiplier(combo);
-    return mult > 1 ? `×${mult.toFixed(1)} combo` : '';
   }
 
   private show(): void {
@@ -163,6 +164,26 @@ export class ComboCounter {
       ease: 'Back.easeOut',
     });
     this.redrawMeter(1);
+  }
+
+  private highlightMultiplier(tier: number): void {
+    const bigPx = Math.round(this.multFontBase * (1.38 + tier * 0.05));
+    this.scene.tweens.killTweensOf(this.multText);
+    this.multText.setStyle({ fontSize: `${bigPx}px` });
+    this.multText.setScale(1);
+    this.scene.tweens.add({
+      targets: this.multText,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      duration: 200,
+      yoyo: true,
+      repeat: 1,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.multText.setStyle({ fontSize: `${this.multFontBase}px` });
+        this.multText.setScale(1);
+      },
+    });
   }
 
   private hide(): void {

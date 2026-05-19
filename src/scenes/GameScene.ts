@@ -579,7 +579,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.combo > 1) {
-      const drainMult = this.difficulty.getComboDrainMultiplier();
+      const drainMult = this.difficulty.getComboDrainMultiplier(this.combo);
       this.comboDrainProgress += (delta / COMBO.baseTimeoutMs) * drainMult;
       this.hud.updateComboTimer(1 - this.comboDrainProgress);
       if (this.comboDrainProgress >= 1) {

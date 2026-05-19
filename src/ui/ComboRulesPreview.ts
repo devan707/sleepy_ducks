@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COMBO_UI } from '../config/gameConfig';
-import { comboMultiplier } from '../scoring/runScore';
+import { formatComboMultiplierLabel } from '../scoring/runScore';
 import {
   drawComboPanelMeter,
   getComboPanelTextLayout,
@@ -16,7 +16,7 @@ export function addComboRulesPreview(
 ): number {
   const sampleCombo = 5;
   const timerLeft = 0.62;
-  const mult = comboMultiplier(sampleCombo);
+  const mult = formatComboMultiplierLabel(sampleCombo);
   const layout = getComboPanelTextLayout();
 
   const root = scene.add.container(centerX, topY);
@@ -47,7 +47,7 @@ export function addComboRulesPreview(
     .setOrigin(0.5);
 
   const multText = scene.add
-    .text(0, layout.multY, `×${mult.toFixed(1)} combo`, {
+    .text(0, layout.multY, mult, {
       fontFamily: 'system-ui, -apple-system, sans-serif',
       fontSize: `${layout.multSize}px`,
       fontStyle: 'bold',

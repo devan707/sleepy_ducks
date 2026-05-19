@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GOLDEN_WAKE_URL, WAKE_QUACK_URLS } from './soundPaths';
+import { COMBO } from '../config/gameConfig';
 import {
   getSfxVolume,
   isSfxEnabled,
@@ -258,7 +259,7 @@ export class SoundManager {
     );
   }
 
-  /** Escalating fanfare at 5 / 10 / 20 / 30 / 50 combo. */
+  /** Escalating fanfare at combo milestones (5 … 100). */
   private playComboMilestoneChime(tier: number): void {
     const baseNotes = [784, 880, 988, 1047, 1175, 1319, 1568, 1760];
     const noteCount = 3 + tier;
@@ -286,6 +287,12 @@ export class SoundManager {
     if (tier >= 4) {
       notes.push({ freq: 1760, delay: chordAt + 0.14, dur: 0.36, gainMult: 1 });
       notes.push({ freq: 2093, delay: chordAt + 0.28, dur: 0.42, gainMult: 0.9 });
+    }
+    if (tier >= 5) {
+      notes.push({ freq: 2349, delay: chordAt + 0.32, dur: 0.44, gainMult: 0.95 });
+    }
+    if (tier >= 6) {
+      notes.push({ freq: 2637, delay: chordAt + 0.4, dur: 0.48, gainMult: 1 });
     }
 
     this.playScheduledChime(notes, 0.15 + tier * 0.028);
@@ -341,15 +348,16 @@ export class SoundManager {
     osc.stop(start + dur + 0.05);
   }
 
-  /** Combo meter start or milestone fanfare (tier 0 = 5 combo … 4 = 50). */
+  /** Combo meter start or milestone fanfare (tier 0 = 5 combo …). */
   playComboReward(kind: 'start' | 'milestone', milestoneTier = 0): void {
     if (!this.sfxEnabled) return;
     this.tryUnlock();
     if (kind === 'start') {
       this.playComboStartChime();
     } else {
+      const maxTier = COMBO.milestones.length - 1;
       this.playComboMilestoneChime(
-        Phaser.Math.Clamp(Math.floor(milestoneTier), 0, 4),
+        Phaser.Math.Clamp(Math.floor(milestoneTier), 0, maxTier),
       );
     }
   }
