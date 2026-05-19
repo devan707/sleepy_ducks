@@ -354,10 +354,17 @@ export const MOONFLOWER = {
   swayFrameRate: 8,
 } as const;
 
-export const CHARM_REVEAL = {
-  fadeInMs: 250,
-  holdMs: 1200,
-  fadeOutMs: 280,
-  flyToSlotMs: 420,
-  boxBottomY: 118,
+export const MOONFLOWER_COLLECT_TOAST = {
+  y: 132,
+  panelWidth: 272,
+  panelHeight: 76,
+  panelAlpha: 0.82,
+  flowerHeight: 48,
+  flowerInsetLeft: 44,
+  textInsetLeft: 86,
+  textInsetRight: 16,
+  startScale: 0.88,
+  fadeInMs: 280,
+  holdMs: 1600,
+  fadeOutMs: 360,
 } as const;

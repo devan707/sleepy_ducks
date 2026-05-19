@@ -107,11 +107,6 @@ export const MENU_MANIFEST: AssetManifestEntry[] = [
     path: `${ASSET_ROOT}/ui/retry.png`,
     type: 'image',
   },
-  {
-    key: ASSET_KEYS.charmBox,
-    path: `${ASSET_ROOT}/ui/charm_box.png`,
-    type: 'image',
-  },
 ];
 
 /** Heavy atlases — loaded in background on the menu screen. */

@@ -317,7 +317,6 @@ export class GameScene extends Phaser.Scene {
 
   private tryPointerTap(worldX: number, worldY: number): boolean {
     if (this.calibrationMode || this.isGameOver || this.settingsPaused) return false;
-    if (this.moonflowerController?.isBlockingInput()) return true;
 
     if (this.moonflowerController?.tryTap(worldX, worldY)) {
       this.soundManager.play('bonus');

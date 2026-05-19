@@ -4,20 +4,19 @@ import { GameEvents } from '../core/GameEvents';
 import { MOONFLOWER } from '../config/gameConfig';
 import { Moonflower, MoonflowerTapSuppress } from '../objects/Moonflower';
 import type { WaterfallStage } from '../objects/WaterfallStage';
-import { CharmBoxReveal } from '../ui/CharmBoxReveal';
+import { MoonflowerCollectToast } from '../ui/MoonflowerCollectToast';
 import { isCharmCollected } from '../storage/charms';
 
 export class MoonflowerController {
   private scene: Phaser.Scene;
   private moonflower: Moonflower | null = null;
-  private reveal: CharmBoxReveal;
-  private collecting = false;
+  private toast: MoonflowerCollectToast;
   private spawnedThisRun = false;
   private enabled = true;
 
   constructor(scene: Phaser.Scene, _stage: WaterfallStage) {
     this.scene = scene;
-    this.reveal = new CharmBoxReveal(scene);
+    this.toast = new MoonflowerCollectToast(scene);
 
     scene.events.on(GameEvents.STARS_VISIBLE, this.onStarsVisible, this);
     scene.events.on(GameEvents.GAME_OVER, this.onGameOver, this);
@@ -32,15 +31,11 @@ export class MoonflowerController {
   }
 
   tryTap(worldX: number, worldY: number): boolean {
-    if (!this.moonflower?.active || this.collecting) return false;
+    if (!this.moonflower?.active) return false;
     if (!this.moonflower.containsWorldPoint(worldX, worldY)) return false;
     if (!this.moonflower.tap()) return false;
     this.beginCollect();
     return true;
-  }
-
-  isBlockingInput(): boolean {
-    return this.collecting;
   }
 
   destroy(): void {
@@ -48,7 +43,7 @@ export class MoonflowerController {
     this.scene.events.off(GameEvents.GAME_OVER, this.onGameOver, this);
     this.moonflower?.destroy();
     this.moonflower = null;
-    this.reveal.destroy();
+    this.toast.destroy();
   }
 
   private onStarsVisible(): void {
@@ -59,26 +54,18 @@ export class MoonflowerController {
   }
 
   private onGameOver(): void {
-    if (this.collecting) return;
     this.moonflower?.destroy();
     this.moonflower = null;
   }
 
   private beginCollect(): void {
-    if (this.collecting || !this.moonflower) return;
-    this.collecting = true;
+    if (!this.moonflower) return;
 
-    const fromX = this.moonflower.x;
-    const fromY = this.moonflower.y;
     this.moonflower.destroy();
     this.moonflower = null;
 
-    this.reveal.show({
-      charmId: 'moonflower',
-      fromWorldX: fromX,
-      fromWorldY: fromY,
+    this.toast.show({
       onComplete: () => {
-        this.collecting = false;
         this.scene.events.emit(GameEvents.CHARM_COLLECTED, { id: 'moonflower' });
       },
     });
