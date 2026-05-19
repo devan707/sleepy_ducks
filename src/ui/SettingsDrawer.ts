@@ -344,8 +344,8 @@ export class SettingsDrawer {
       const total = getCharmCount('moonflower');
       hint.setText(
         total > 0
-          ? `Moonflowers collected: ${total}`
-          : 'Play at night to collect\na Moonflower each run',
+          ? `Moonflowers in chest: ${total}\nCollect another after sunset each run`
+          : 'After sunset each run, a Moonflower\nblooms on the left cliff',
       );
     }
   }

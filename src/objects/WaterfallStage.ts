@@ -179,6 +179,11 @@ export class WaterfallStage {
     this.flowEffect.update(time, delta);
   }
 
+  /** 0–1 — moonflower spawns once this crosses ~0.05 after sunset. */
+  getStarVisibility(): number {
+    return this.dayNight.getStarVisibility();
+  }
+
   getLipEmergenceMask(): Phaser.Display.Masks.GeometryMask {
     return getLipEmergenceMask(this.scene);
   }

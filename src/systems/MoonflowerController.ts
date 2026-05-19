@@ -6,8 +6,13 @@ import { Moonflower, MoonflowerTapSuppress } from '../objects/Moonflower';
 import type { WaterfallStage } from '../objects/WaterfallStage';
 import { MoonflowerCollectToast } from '../ui/MoonflowerCollectToast';
 import type { GameplayBottomToast } from '../ui/GameplayBottomToast';
+
+const STAR_SPAWN_THRESHOLD = 0.05;
+
+/** Night collectible — one spawn attempt per run after stars appear (always, even if chest count > 0). */
 export class MoonflowerController {
   private scene: Phaser.Scene;
+  private stage: WaterfallStage;
   private moonflower: Moonflower | null = null;
   private toast: MoonflowerCollectToast;
   private spawnedThisRun = false;
@@ -16,10 +21,11 @@ export class MoonflowerController {
 
   constructor(
     scene: Phaser.Scene,
-    _stage: WaterfallStage,
+    stage: WaterfallStage,
     bottomToast: GameplayBottomToast,
   ) {
     this.scene = scene;
+    this.stage = stage;
     this.toast = new MoonflowerCollectToast(bottomToast);
 
     scene.events.on(GameEvents.STARS_VISIBLE, this.onStarsVisible, this);
@@ -32,17 +38,13 @@ export class MoonflowerController {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
+    if (enabled) {
+      this.trySpawnMoonflower();
+    }
   }
 
   isCollectedThisRun(): boolean {
     return this.collectedThisRun;
-  }
-
-  resetForNewRun(): void {
-    this.spawnedThisRun = false;
-    this.collectedThisRun = false;
-    this.moonflower?.destroy();
-    this.moonflower = null;
   }
 
   tryTap(worldX: number, worldY: number): boolean {
@@ -62,15 +64,22 @@ export class MoonflowerController {
   }
 
   private onStarsVisible(): void {
-    if (!this.enabled || this.spawnedThisRun || this.collectedThisRun) return;
-    this.spawnedThisRun = true;
-    registerMoonflowerAnimations(this.scene);
-    this.moonflower = new Moonflower(this.scene, MOONFLOWER.x, MOONFLOWER.y);
+    this.trySpawnMoonflower();
   }
 
   private onGameOver(): void {
     this.moonflower?.destroy();
     this.moonflower = null;
+  }
+
+  /** Spawn once per run after sunset — independent of charms already in the chest. */
+  private trySpawnMoonflower(): void {
+    if (!this.enabled || this.spawnedThisRun || this.collectedThisRun) return;
+    if (this.stage.getStarVisibility() < STAR_SPAWN_THRESHOLD) return;
+
+    this.spawnedThisRun = true;
+    registerMoonflowerAnimations(this.scene);
+    this.moonflower = new Moonflower(this.scene, MOONFLOWER.x, MOONFLOWER.y);
   }
 
   private beginCollect(): void {

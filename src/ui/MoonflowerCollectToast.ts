@@ -18,7 +18,7 @@ export class MoonflowerCollectToast {
     recordCharmCollect('moonflower', 0);
 
     const toastOpts: GameplayBottomToastOptions = {
-      text: 'Moonflower collected!',
+      text: 'Moonflower collected! +1 in chest',
       imageKey: MOONFLOWER_ATLAS_KEYS.sway,
       imageFrame: 'frame_000',
       onComplete: opts.onComplete,

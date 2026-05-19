@@ -332,6 +332,7 @@ export class DayNightCycle {
     if (elapsedSec <= 0) {
       this.twilightStartSec = null;
       this.sunsetEmitted = false;
+      this.starsVisibleEmitted = false;
       this.heldSunsetWarmth = 0;
     }
 
