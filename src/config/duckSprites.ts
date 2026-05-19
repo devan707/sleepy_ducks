@@ -116,13 +116,13 @@ export function resolveDuckSpriteSet(
   }
 
   if (kind === 'decoy') {
-    const crestTexture = textureReady(scene, ASSET_KEYS.decoy)
-      ? ASSET_KEYS.decoy
-      : ASSET_KEYS.atlasDuckSleep;
     return {
-      crestTexture,
+      crestTexture: ASSET_KEYS.decoy,
       crestAnimKey: null,
-      ...MALE_MALLARD,
+      wakeTexture: ASSET_KEYS.decoy,
+      wakeAnimKey: '',
+      flyTexture: ASSET_KEYS.decoy,
+      flyAnimKey: '',
     };
   }
 

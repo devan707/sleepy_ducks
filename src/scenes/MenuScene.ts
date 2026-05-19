@@ -53,6 +53,8 @@ export class MenuScene extends Phaser.Scene {
       musicManager: this.musicManager,
       soundManager: this.soundManager,
       musicContext: 'menuUi',
+      onOpen: () => this.musicManager.pauseForInterruption(),
+      onClose: () => this.musicManager.resumeFromInterruption(),
     });
     this.settingsButton = new SettingsButton(this, {
       drawer: this.settingsDrawer,
@@ -97,7 +99,7 @@ export class MenuScene extends Phaser.Scene {
 
     const taglineY = logoY + this.titleLogo.displayHeight + 20;
     this.add
-      .text(cx, taglineY, 'Wake them before they fall!', titleTextStyle({ fontSize: '17px' }))
+      .text(cx, taglineY, 'Save them from the fall', titleTextStyle({ fontSize: '17px' }))
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);

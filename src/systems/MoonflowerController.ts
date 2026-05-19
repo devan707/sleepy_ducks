@@ -5,18 +5,22 @@ import { MOONFLOWER } from '../config/gameConfig';
 import { Moonflower, MoonflowerTapSuppress } from '../objects/Moonflower';
 import type { WaterfallStage } from '../objects/WaterfallStage';
 import { MoonflowerCollectToast } from '../ui/MoonflowerCollectToast';
-import { isCharmCollected } from '../storage/charms';
-
+import type { GameplayBottomToast } from '../ui/GameplayBottomToast';
 export class MoonflowerController {
   private scene: Phaser.Scene;
   private moonflower: Moonflower | null = null;
   private toast: MoonflowerCollectToast;
   private spawnedThisRun = false;
+  private collectedThisRun = false;
   private enabled = true;
 
-  constructor(scene: Phaser.Scene, _stage: WaterfallStage) {
+  constructor(
+    scene: Phaser.Scene,
+    _stage: WaterfallStage,
+    bottomToast: GameplayBottomToast,
+  ) {
     this.scene = scene;
-    this.toast = new MoonflowerCollectToast(scene);
+    this.toast = new MoonflowerCollectToast(bottomToast);
 
     scene.events.on(GameEvents.STARS_VISIBLE, this.onStarsVisible, this);
     scene.events.on(GameEvents.GAME_OVER, this.onGameOver, this);
@@ -30,7 +34,19 @@ export class MoonflowerController {
     this.enabled = enabled;
   }
 
+  isCollectedThisRun(): boolean {
+    return this.collectedThisRun;
+  }
+
+  resetForNewRun(): void {
+    this.spawnedThisRun = false;
+    this.collectedThisRun = false;
+    this.moonflower?.destroy();
+    this.moonflower = null;
+  }
+
   tryTap(worldX: number, worldY: number): boolean {
+    if (this.collectedThisRun) return false;
     if (!this.moonflower?.active) return false;
     if (!this.moonflower.containsWorldPoint(worldX, worldY)) return false;
     if (!this.moonflower.tap()) return false;
@@ -43,11 +59,10 @@ export class MoonflowerController {
     this.scene.events.off(GameEvents.GAME_OVER, this.onGameOver, this);
     this.moonflower?.destroy();
     this.moonflower = null;
-    this.toast.destroy();
   }
 
   private onStarsVisible(): void {
-    if (!this.enabled || this.spawnedThisRun || isCharmCollected('moonflower')) return;
+    if (!this.enabled || this.spawnedThisRun || this.collectedThisRun) return;
     this.spawnedThisRun = true;
     registerMoonflowerAnimations(this.scene);
     this.moonflower = new Moonflower(this.scene, MOONFLOWER.x, MOONFLOWER.y);
@@ -59,8 +74,9 @@ export class MoonflowerController {
   }
 
   private beginCollect(): void {
-    if (!this.moonflower) return;
+    if (!this.moonflower || this.collectedThisRun) return;
 
+    this.collectedThisRun = true;
     this.moonflower.destroy();
     this.moonflower = null;
 

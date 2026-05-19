@@ -15,9 +15,17 @@ import {
   scoreTextStyle,
 } from '../ui/uiChrome';
 import { ComboCounter } from './ComboCounter';
+import { burstComboCelebration } from '../effects/ParticleEffects';
+import { GoldenEggMeter, type GoldenEggMeterState } from './GoldenEggMeter';
+import { MoonflowerHudIcon } from './MoonflowerHudIcon';
+
+const EGG_ICON_GAP = 6;
+/** Moonflower silhouette is wider than the egg — extra offset from egg center. */
+const CHARM_SLOT_OFFSET_X = 20;
 
 const HEART_SIZE = 24;
 const HEART_GAP = 5;
+const EGG_BELOW_HEARTS = 10;
 const PANEL_FILL = 0x0a2230;
 const PANEL_ALPHA = 0.72;
 
@@ -30,6 +38,8 @@ export class HUD {
   private comboCounter: ComboCounter;
   private hearts: Phaser.GameObjects.Image[] = [];
   private livesContainer: Phaser.GameObjects.Container;
+  private goldenEggMeter: GoldenEggMeter;
+  private moonflowerHudIcon: MoonflowerHudIcon;
   private hudRoot: Phaser.GameObjects.Container;
   private readonly scoreLeft: number;
   private readonly scoreTop: number;
@@ -77,6 +87,15 @@ export class HUD {
       this.scoreValueText,
       this.timerText,
       this.livesContainer,
+    ]);
+
+    const eggY = this.scoreTop + 8 + HEART_SIZE + EGG_BELOW_HEARTS + 14;
+    const charmX = heartsRight - 11 - EGG_ICON_GAP - CHARM_SLOT_OFFSET_X;
+    this.moonflowerHudIcon = new MoonflowerHudIcon(scene, charmX, eggY);
+    this.goldenEggMeter = new GoldenEggMeter(scene, heartsRight - 10, eggY);
+    this.hudRoot.add([
+      this.moonflowerHudIcon.getContainer(),
+      this.goldenEggMeter.getContainer(),
     ]);
 
     this.setLives(MAX_LIVES);
@@ -135,6 +154,13 @@ export class HUD {
     this.comboCounter.updateTimer(timeLeft01);
   }
 
+  celebrateCombo(kind: 'start' | 'milestone', tier = 0): void {
+    this.comboCounter.celebrate(kind, tier);
+    const { x, y } = this.comboCounter.getWorldCenter();
+    const particleTier = kind === 'start' ? 0 : tier;
+    burstComboCelebration(this.scene, x, y, particleTier);
+  }
+
   flashMiss(): void {
     this.scene.tweens.add({
       targets: this.livesContainer,
@@ -143,6 +169,27 @@ export class HUD {
       yoyo: true,
       repeat: 2,
     });
+  }
+
+  setGoldenEggState(state: GoldenEggMeterState): void {
+    this.goldenEggMeter.setState(state);
+  }
+
+  setGoldenEggProgress(saves: number): void {
+    this.goldenEggMeter.setProgress(saves);
+  }
+
+  pulseGoldenEggFull(): void {
+    this.goldenEggMeter.pulseFull();
+  }
+
+  getGoldenEggWorldPosition(): { x: number; y: number } {
+    const egg = this.goldenEggMeter.getContainer();
+    return { x: egg.x + this.hudRoot.x, y: egg.y + this.hudRoot.y };
+  }
+
+  setMoonflowerCollectedThisRun(collected: boolean, animate = false): void {
+    this.moonflowerHudIcon.setCollectedThisRun(collected, animate);
   }
 
   destroy(): void {

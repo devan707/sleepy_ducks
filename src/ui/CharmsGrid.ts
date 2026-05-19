@@ -6,7 +6,7 @@ import {
   CHARMS,
   type CharmId,
 } from '../config/charmConfig';
-import { loadCharms } from '../storage/charms';
+import { getCharmCount, loadCharms } from '../storage/charms';
 
 export type CharmsGridOptions = {
   /** Local origin X of the charm box art (center). */
@@ -23,6 +23,7 @@ export type CharmsGridOptions = {
 
 export class CharmsGrid extends Phaser.GameObjects.Container {
   private slotIcons: (Phaser.GameObjects.Image | null)[] = [];
+  private slotCountLabels: (Phaser.GameObjects.Text | null)[] = [];
   private slotRings: Phaser.GameObjects.Graphics[] = [];
   private readonly layoutScale: number;
   private readonly slotLayout: typeof CHARM_BOX_SLOT_LAYOUT | typeof CHARMS_BARE_ROW_LAYOUT;
@@ -42,11 +43,13 @@ export class CharmsGrid extends Phaser.GameObjects.Container {
 
       const ring = scene.add.graphics();
       const r = 22 * scale;
-      const collected = state.slots[i];
+      const slotCharm = state.slots[i];
+      const moonflowerCount = i === 0 ? getCharmCount('moonflower') : 0;
+      const showMoonflower = i === 0 && moonflowerCount > 0;
       const highlight = opts.highlightSlot === i;
       ring.lineStyle(highlight ? 3 : 2, highlight ? 0xa8e8ff : 0xffffff, highlight ? 0.9 : 0.28);
       ring.strokeCircle(lx, ly, r);
-      if (!collected && opts.showLocked !== false && i > 0) {
+      if (!slotCharm && !showMoonflower && opts.showLocked !== false && i > 0) {
         ring.fillStyle(0x061018, 0.35);
         ring.fillCircle(lx, ly, r - 2);
       }
@@ -54,8 +57,10 @@ export class CharmsGrid extends Phaser.GameObjects.Container {
       this.slotRings.push(ring);
 
       let icon: Phaser.GameObjects.Image | null = null;
-      if (collected) {
-        const def = CHARMS[collected];
+      let countLabel: Phaser.GameObjects.Text | null = null;
+      const charmId = showMoonflower ? 'moonflower' : slotCharm;
+      if (charmId) {
+        const def = CHARMS[charmId];
         if (scene.textures.exists(def.iconAtlasKey)) {
           icon = scene.add.image(lx, ly, def.iconAtlasKey, def.iconFrame);
           const target = 36 * scale;
@@ -64,8 +69,20 @@ export class CharmsGrid extends Phaser.GameObjects.Container {
           icon.setDisplaySize(frame.width * fit, frame.height * fit);
           this.add(icon);
         }
+        if (showMoonflower && moonflowerCount > 0) {
+          countLabel = scene.add
+            .text(lx + r * 0.55, ly + r * 0.45, `×${moonflowerCount}`, {
+              fontFamily: 'system-ui, sans-serif',
+              fontSize: `${Math.round(11 * scale)}px`,
+              color: '#ecf8ff',
+              fontStyle: 'bold',
+            })
+            .setOrigin(0.5);
+          this.add(countLabel);
+        }
       }
       this.slotIcons.push(icon);
+      this.slotCountLabels.push(countLabel);
     }
   }
 

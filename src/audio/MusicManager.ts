@@ -23,6 +23,8 @@ export class MusicManager {
   private gameplayNightCrossfaded = false;
   private gameplayMusicTimelineActive = false;
   private nightTrackStarted = false;
+  /** Settings drawer, tab hidden, etc. — resume only when this returns to 0. */
+  private playbackInterruptionCount = 0;
 
   private constructor() {
     this.clips = {
@@ -33,6 +35,43 @@ export class MusicManager {
     };
     this.clips.menuUi.load();
     this.applyClipVolumes();
+  }
+
+  private isPlaybackBlocked(): boolean {
+    if (this.playbackInterruptionCount > 0) return true;
+    return typeof document !== 'undefined' && document.hidden;
+  }
+
+  /** Pause music while gameplay/UI is interrupted (settings, hidden tab). */
+  pauseForInterruption(): void {
+    this.playbackInterruptionCount += 1;
+    if (this.playbackInterruptionCount === 1) {
+      this.pauseAll();
+    }
+  }
+
+  resumeFromInterruption(): void {
+    if (this.playbackInterruptionCount <= 0) return;
+    this.playbackInterruptionCount -= 1;
+    if (this.playbackInterruptionCount === 0) {
+      this.tryResumeActiveTrack();
+    }
+  }
+
+  /** Call when leaving a scene so the next scene can start fresh playback. */
+  clearPlaybackInterruptions(): void {
+    this.playbackInterruptionCount = 0;
+  }
+
+  private tryResumeActiveTrack(): void {
+    if (this.isPlaybackBlocked()) return;
+    if (!this.musicEnabled || !this.activeTrack) return;
+
+    if (this.activeTrack === 'gameplayNight') {
+      this.play('gameplayNight');
+    } else {
+      this.play(this.activeTrack);
+    }
   }
 
   static getInstance(): MusicManager {
@@ -179,6 +218,7 @@ export class MusicManager {
    * Day: full → fade out 40s–48s. Night: fade in 45s–50s from loop offset.
    */
   updateGameplayMusicCrossfade(elapsedSec: number): void {
+    if (this.isPlaybackBlocked()) return;
     if (!this.musicEnabled || this.gameplayNightCrossfaded) return;
     if (this.activeTrack !== 'gameplay' && !this.gameplayMusicTimelineActive) return;
 
@@ -262,6 +302,10 @@ export class MusicManager {
     this.activeTrack = track;
     if (!this.musicEnabled) return;
 
+    if (this.isPlaybackBlocked()) {
+      return;
+    }
+
     for (const [key, clip] of Object.entries(this.clips) as [MusicTrack, HTMLAudioElement][]) {
       if (key !== track) {
         clip.pause();
@@ -299,6 +343,7 @@ export class MusicManager {
 
   stop(): void {
     this.resetGameplayCrossfadeState();
+    this.clearPlaybackInterruptions();
     this.pauseAll();
     for (const clip of Object.values(this.clips)) {
       clip.currentTime = 0;

@@ -19,6 +19,30 @@ export function createMistEmitter(
   });
 }
 
+export function burstComboCelebration(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  tier: number,
+): Phaser.GameObjects.Particles.ParticleEmitter {
+  const count = 10 + tier * 6;
+  const emitter = scene.add.particles(x, y, ASSET_KEYS.fxSplash, {
+    lifespan: { min: 280, max: 520 + tier * 90 },
+    speed: { min: 90 + tier * 25, max: 220 + tier * 45 },
+    angle: { min: 0, max: 360 },
+    gravityY: 40 + tier * 12,
+    scale: { start: 0.32 + tier * 0.06, end: 0.04 },
+    alpha: { start: 0.95, end: 0 },
+    tint: tier >= 3 ? [0xffcc44, 0xff8844, 0xffeeaa] : [0xffeeaa, 0xffdd66],
+    quantity: count,
+    emitting: false,
+    blendMode: Phaser.BlendModes.ADD,
+  }).setDepth(STAGE.hudDepth + 3);
+  emitter.explode(count);
+  scene.time.delayedCall(950 + tier * 80, () => emitter.destroy());
+  return emitter;
+}
+
 export function burstSplash(
   scene: Phaser.Scene,
   x: number,

@@ -23,6 +23,7 @@ const IMAGE_COLUMN_W = 88;
 const PAD_X = 20;
 const BODY_X = PAD_X + IMAGE_COLUMN_W + 8;
 const BODY_W = GAME_WIDTH - BODY_X - PAD_X;
+const SCROLL_BOTTOM_PAD = 28;
 
 type RuleVisual = 'normal' | 'heavy' | 'golden' | 'balloon' | 'decoy' | 'combo';
 
@@ -37,25 +38,25 @@ type RuleSection = {
 const SECTIONS: RuleSection[] = [
   {
     title: 'Sleeping ducks',
-    body: 'Tap ducks as they crest the waterfall lip. Save them before they fall into the mist!',
+    body: 'Wait until a duck has gone over the lip and is falling — then tap to save it. Tapping too early while it is still cresting shows “Too Early!” — no save, no points, and your combo resets.',
     imageKey: ASSET_KEYS.femaleAsleep,
     visual: 'normal',
   },
   {
     title: 'Heavy sleepers',
-    body: 'Heavy sleepers need two taps — look for the nightcap and sleep mask.',
+    body: 'Heavy sleepers wear a nightcap and mask. Tap one anytime (on the crest or after the lip) for “Tap again!” — the hat and mask come off with no penalty and your combo stays intact. Smart players do this before the lip. After conversion they act like normal sleepers: another crest tap is “Too Early!” and breaks combo; one falling tap saves them.',
     imageKey: ASSET_KEYS.maleDeepSleep,
     visual: 'heavy',
   },
   {
     title: 'Golden ducks',
-    body: 'Golden ducks dive from the sky — tap them before they hit the mist! Worth triple points.',
+    body: 'Golden ducks dive from the sky — tap them before they hit the mist! Worth triple points. Each golden save fills the egg halfway (gold on the bottom), then fully on the second save. The egg stays full and golden for a moment, then a toast awards +1 ♥ and the egg resets to an empty golden outline.',
     imageKey: ASSET_KEYS.goldenSleep,
     visual: 'golden',
   },
   {
     title: 'Combo',
-    body: 'Chain saves for a combo multiplier. Longer runs and more ducks saved boost points on every rescue — keep the timer bar alive or the combo resets.',
+    body: 'Combo is a clean streak of successful saves. It grows when you save a duck and boosts your score. Combo only breaks when: the timer runs out between saves, a real duck hits the mist, you tap empty space or a decoy, or you tap too early on a normal sleeper (not the first “Tap again!” on a heavy sleeper). Keep the timer bar alive!',
     visual: 'combo',
   },
   {
@@ -67,9 +68,13 @@ const SECTIONS: RuleSection[] = [
   },
   {
     title: 'Decoy duck',
-    body: 'Do NOT tap the decoy — that costs 1 life and resets your combo. Letting it fall is safe.',
+    body: 'Decoy ducks look similar but cannot be saved — they always fall on their own. Tapping one counts as a bad tap (a quick whiff/sploosh and yellow X) and resets your combo. Ignore them when you can.',
     imageKey: ASSET_KEYS.decoy,
     visual: 'decoy',
+  },
+  {
+    title: 'Empty taps',
+    body: 'Tapping empty space (not the settings gear or other UI) is a bad tap — you’ll hear a quick whiff/sploosh, see a yellow X, and lose your combo. Aim carefully!',
   },
 ];
 
@@ -164,22 +169,21 @@ export class RulesScene extends Phaser.Scene {
       this.scene.start(SCENE_KEYS.menu);
     });
 
-    const contentTop = header.y + 36;
-    const contentBottom = backY - 28;
+    const contentTop = header.y + 28;
+    const contentBottom = backY - 24;
     const viewportH = contentBottom - contentTop;
 
-    const container = this.add.container(0, 0);
+    const container = this.add.container(0, contentTop);
     container.setDepth(DEPTH.ui);
 
-    let y = contentTop;
+    let y = 0;
     for (const section of SECTIONS) {
       y = this.addSection(container, section, y);
       y += 14;
     }
-    const contentHeight = y - contentTop;
+    const contentHeight = y + SCROLL_BOTTOM_PAD;
     const maxScroll = Math.max(0, contentHeight - viewportH);
     this.scrollY = 0;
-    container.y = contentTop;
 
     const maskShape = this.make.graphics({ x: 0, y: 0 });
     maskShape.fillStyle(0xffffff);

@@ -7,35 +7,42 @@ import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
 import { SettingsButton } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
+import { MOONFLOWER_ATLAS_KEYS } from '../config/moonflowerAssets';
 import {
   BALLOON,
   COLORS,
-  COMBO_TIMEOUT_MS,
+  COMBO,
+  getComboMilestoneTier,
   DUCK,
+  getMoonflowerHintAtSec,
+  GOLDEN_EGG,
   MAX_LIVES,
   MAX_LIVES_CAP,
   SCENE_KEYS,
   STAGE,
 } from '../config/gameConfig';
+import { GameplayBottomToast } from '../ui/GameplayBottomToast';
 import { GameEvents } from '../core/GameEvents';
 import type { GameOverData } from '../core/types';
 import { burstSplash } from '../effects/ParticleEffects';
 import {
   createRunStats,
+  isDuckMissForStats,
   recordDuckMissed,
-  tickSurvivalTime,
   recordDuckSaved,
+  recordMissedTap,
+  tickSurvivalTime,
   updateLongestCombo,
   type RunStats,
 } from '../models/RunStats';
 import {
   Duck,
+  type DuckEarlyTapPayload,
   type DuckMissedPayload,
   type DuckSavedPayload,
   type DuckTapResult,
 } from '../objects/Duck';
 import { HeartBalloon } from '../objects/HeartBalloon';
-import { comboTimeLeft01 } from '../objects/ComboCounter';
 import { scoreDuckSave } from '../scoring/runScore';
 import { HUD } from '../objects/HUD';
 import { WaterfallStage } from '../objects/WaterfallStage';
@@ -48,6 +55,8 @@ import {
 import { DevControlsLegend } from '../dev/DevControlsLegend';
 import { isDevMode } from '../dev/isDevMode';
 import { isWatchModeActive, resetWatchMode } from '../dev/watchMode';
+
+type BadTapKind = 'empty' | 'decoy';
 import { isWatchTimePaused, resetWatchTime } from '../dev/watchTime';
 import { WatchModeControls } from '../dev/WatchModeControls';
 import { clearEnvironmentGeometryOverride } from '../config/environmentGeometry';
@@ -71,8 +80,9 @@ export class GameScene extends Phaser.Scene {
 
   private score = 0;
   private lives = MAX_LIVES;
+  private goldenEggSaves = 0;
   private combo = 0;
-  private comboTimer = 0;
+  private comboDrainProgress = 0;
   private isGameOver = false;
   private calibrationMode = false;
   private devLegend: DevControlsLegend | null = null;
@@ -85,6 +95,11 @@ export class GameScene extends Phaser.Scene {
   private suppressTapOnPointerUp = false;
   /** Prevents double life loss from one mistake in the same frame. */
   private lifeLossCooldown = false;
+  private bottomToast!: GameplayBottomToast;
+  private moonflowerHintShown = false;
+  private goldenEggRewardTimer: Phaser.Time.TimerEvent | null = null;
+  /** Prevents one golden duck from crediting the egg twice (e.g. duplicate save events). */
+  private goldenEggCreditedDucks = new WeakSet<Duck>();
 
   constructor() {
     super(SCENE_KEYS.game);
@@ -116,8 +131,12 @@ export class GameScene extends Phaser.Scene {
     this.isGameOver = false;
     this.score = 0;
     this.lives = MAX_LIVES;
+    this.goldenEggSaves = 0;
+    this.cancelGoldenEggRewardTimer();
+    this.goldenEggCreditedDucks = new WeakSet<Duck>();
+    this.moonflowerHintShown = false;
     this.combo = 0;
-    this.comboTimer = 0;
+    this.comboDrainProgress = 0;
     this.stats = createRunStats();
     this.activeBalloons = [];
     this.suppressTapOnPointerUp = false;
@@ -156,7 +175,9 @@ export class GameScene extends Phaser.Scene {
     this.hud = new HUD(this);
     this.hud.setScore(0);
     this.hud.setLives(this.lives);
+    this.hud.setGoldenEggState('empty');
     this.hud.setCombo(0);
+    this.bottomToast = new GameplayBottomToast(this);
 
     this.ducks = this.add.group({ runChildUpdate: false });
 
@@ -168,14 +189,24 @@ export class GameScene extends Phaser.Scene {
       this.stage,
     );
 
-    this.moonflowerController = new MoonflowerController(this, this.stage);
+    this.moonflowerController = new MoonflowerController(this, this.stage, this.bottomToast);
+    this.hud.setMoonflowerCollectedThisRun(false);
+
+    this.events.off('duck-spawned', this.onDuckSpawned, this);
+    this.events.off('duck-partial-tap', this.onPartialTap, this);
+    this.events.off(GameEvents.DUCK_TAPPED, this.onDuckTapped, this);
+    this.events.off(GameEvents.DUCK_SAVED, this.onDuckSaved, this);
+    this.events.off(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
+    this.events.off(GameEvents.EARLY_TAP, this.onEarlyTap, this);
+    this.events.off(GameEvents.CHARM_COLLECTED, this.onCharmCollected, this);
 
     this.events.on('duck-spawned', this.onDuckSpawned, this);
     this.events.on('duck-partial-tap', this.onPartialTap, this);
     this.events.on(GameEvents.DUCK_TAPPED, this.onDuckTapped, this);
     this.events.on(GameEvents.DUCK_SAVED, this.onDuckSaved, this);
     this.events.on(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
-    this.events.on(GameEvents.DECOY_TAPPED, this.onDecoyTapped, this);
+    this.events.on(GameEvents.EARLY_TAP, this.onEarlyTap, this);
+    this.events.on(GameEvents.CHARM_COLLECTED, this.onCharmCollected, this);
 
     this.scheduleHeartBalloons();
 
@@ -229,11 +260,13 @@ export class GameScene extends Phaser.Scene {
     this.settingsPaused = true;
     this.spawner.stop();
     this.moonflowerController?.setEnabled(false);
+    this.musicManager.pauseForInterruption();
   }
 
   private applySettingsResume(): void {
     if (!this.settingsPaused) return;
     this.settingsPaused = false;
+    this.musicManager.resumeFromInterruption();
     if (!this.isGameOver && !this.calibrationMode) {
       this.moonflowerController?.setEnabled(true);
       this.spawner.start();
@@ -242,7 +275,11 @@ export class GameScene extends Phaser.Scene {
 
   private quitToMenu(): void {
     this.leavingViaSettings = true;
+    this.settingsPaused = true;
+    this.spawner.stop();
     this.settingsDrawer.close();
+    this.musicManager.clearPlaybackInterruptions();
+    this.musicManager.pauseAll();
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.time.delayedCall(280, () => {
       this.leavingViaSettings = false;
@@ -315,8 +352,13 @@ export class GameScene extends Phaser.Scene {
     this.tryPointerTap(worldX, worldY);
   }
 
+  private isGameplayUiTap(worldX: number, worldY: number): boolean {
+    return SettingsButton.hitsWorldPoint(worldX, worldY);
+  }
+
   private tryPointerTap(worldX: number, worldY: number): boolean {
     if (this.calibrationMode || this.isGameOver || this.settingsPaused) return false;
+    if (this.isGameplayUiTap(worldX, worldY)) return false;
 
     if (this.moonflowerController?.tryTap(worldX, worldY)) {
       this.soundManager.play('bonus');
@@ -337,7 +379,35 @@ export class GameScene extends Phaser.Scene {
       return true;
     }
 
-    return this.tryTapDuckAt(worldX, worldY) !== 'none';
+    const duckResult = this.tryTapDuckAt(worldX, worldY);
+    if (duckResult !== 'none') return true;
+
+    if (this.isTapOnEarlyLockedDuck(worldX, worldY)) return true;
+
+    if (this.isTapOnDecoy(worldX, worldY)) {
+      this.recordBadTap('decoy', worldX, worldY);
+      return true;
+    }
+
+    this.recordBadTap('empty', worldX, worldY);
+    return true;
+  }
+
+  /** Tap on a duck frozen in the too-early penalty — ignore (no save, no bad tap). */
+  private isTapOnEarlyLockedDuck(worldX: number, worldY: number): boolean {
+    return (this.ducks.getChildren() as Duck[]).some(
+      (d) =>
+        d.active &&
+        d.isEarlyTapLocked() &&
+        d.containsWorldPoint(worldX, worldY),
+    );
+  }
+
+  /** Tap landed on a decoy (motion unaffected; still a bad tap). */
+  private isTapOnDecoy(worldX: number, worldY: number): boolean {
+    return (this.ducks.getChildren() as Duck[]).some(
+      (d) => d.active && d.kind === 'decoy' && d.containsWorldPoint(worldX, worldY),
+    );
   }
 
   private tryTapDuckAt(worldX: number, worldY: number): DuckTapResult {
@@ -374,25 +444,59 @@ export class GameScene extends Phaser.Scene {
     this.activeBalloons.push(balloon);
   }
 
-  private onBalloonPopped(x: number, y: number): void {
+  private grantBonusLife(
+    x: number,
+    y: number,
+    floatingColor = '#ff8fab',
+    showFloat = true,
+  ): void {
     if (this.isGameOver) return;
+    if (this.lives >= MAX_LIVES_CAP) return;
+
     this.lives = Math.min(MAX_LIVES_CAP, this.lives + 1);
     this.hud.setLives(this.lives);
     this.soundManager.play('bonus');
-    this.showFloatingText(x, y - 20, '+1 ♥', '#ff8fab');
+    if (showFloat) {
+      this.showFloatingText(x, y - 20, '+1 ♥', floatingColor);
+    }
     this.events.emit(GameEvents.LIVES_CHANGED, this.lives);
+  }
+
+  private onBalloonPopped(x: number, y: number): void {
+    this.grantBonusLife(x, y);
     this.events.emit(GameEvents.BALLOON_POPPED);
   }
 
-  private onDecoyTapped(payload: { x: number; y: number }): void {
+  private onEarlyTap(payload: DuckEarlyTapPayload): void {
+    if (this.calibrationMode) return;
+
+    if (isWatchModeActive()) {
+      if (payload.breaksCombo) this.resetCombo();
+      return;
+    }
+
+    recordMissedTap(this.stats);
+    if (payload.breaksCombo) {
+      this.resetCombo();
+    }
+    this.soundManager.play('earlyBuzzer');
+    this.showFloatingText(payload.x, payload.y - 32, 'Too Early!', '#ffd700');
+  }
+
+  /** Empty space or decoy — breaks combo; does not apply to heavy-sleeper conversion taps. */
+  private recordBadTap(kind: BadTapKind, x: number, y: number): void {
     if (this.isGameOver || this.calibrationMode) return;
-    this.loseOneLife(payload.x, payload.y, {
-      text: '-1 ♥',
-      color: '#e74c3c',
-      sound: 'bad',
-      resetCombo: true,
-      shake: 100,
-    });
+
+    if (isWatchModeActive()) {
+      this.resetCombo();
+      return;
+    }
+
+    recordMissedTap(this.stats);
+    this.resetCombo();
+    this.soundManager.play('badTap');
+    this.showBadTapX(x, y);
+    this.events.emit(GameEvents.BAD_TAP, { kind, x, y });
   }
 
   /**
@@ -475,12 +579,33 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.combo > 1) {
-      this.comboTimer += delta;
-      this.hud.updateComboTimer(comboTimeLeft01(this.comboTimer));
-      if (this.comboTimer >= COMBO_TIMEOUT_MS) {
+      const drainMult = this.difficulty.getComboDrainMultiplier();
+      this.comboDrainProgress += (delta / COMBO.baseTimeoutMs) * drainMult;
+      this.hud.updateComboTimer(1 - this.comboDrainProgress);
+      if (this.comboDrainProgress >= 1) {
         this.resetCombo();
       }
     }
+
+    this.tryMoonflowerSunsetHint();
+  }
+
+  private onCharmCollected(): void {
+    this.hud.setMoonflowerCollectedThisRun(true, true);
+  }
+
+  /** Seven seconds before sunset — remind players about the night charm. */
+  private tryMoonflowerSunsetHint(): void {
+    if (this.moonflowerHintShown || this.calibrationMode) return;
+    if (this.moonflowerController.isCollectedThisRun()) return;
+    if (this.difficulty.elapsedSeconds < getMoonflowerHintAtSec()) return;
+
+    this.moonflowerHintShown = true;
+    this.bottomToast.show({
+      text: 'Collect the moonflower after sunset',
+      imageKey: MOONFLOWER_ATLAS_KEYS.sway,
+      imageFrame: 'frame_000',
+    });
   }
 
   private onDuckSpawned(_duck: Duck): void {
@@ -507,7 +632,7 @@ export class GameScene extends Phaser.Scene {
     const { duck, kind, points: basePoints } = payload;
 
     this.combo += 1;
-    this.comboTimer = 0;
+    this.comboDrainProgress = 0;
     updateLongestCombo(this.stats, this.combo);
     const ducksSavedBefore = this.stats.ducksSaved;
     recordDuckSaved(this.stats);
@@ -525,26 +650,81 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(GameEvents.SCORE_CHANGED, this.score);
     this.events.emit(GameEvents.COMBO_CHANGED, this.combo);
 
+    if (this.combo === 2) {
+      this.hud.celebrateCombo('start');
+      this.soundManager.playComboReward('start');
+    }
+
+    const milestoneTier = getComboMilestoneTier(this.combo);
+    if (milestoneTier !== null) {
+      this.hud.celebrateCombo('milestone', milestoneTier);
+      this.soundManager.playComboReward('milestone', milestoneTier);
+    }
+
     if (kind === 'golden') {
       this.showFloatingText(duck.x, duck.y, `+${points}!`, '#ffd700');
+      this.onGoldenDuckSavedForEgg(duck.x, duck.y, duck);
     } else {
       this.showFloatingText(duck.x, duck.y, `+${points}`, '#ecf0f1');
     }
+  }
 
-    if (this.combo >= 5 && this.combo % 5 === 0) {
-      this.soundManager.play('combo');
+  private cancelGoldenEggRewardTimer(): void {
+    this.goldenEggRewardTimer?.remove(false);
+    this.goldenEggRewardTimer = null;
+  }
+
+  private onGoldenDuckSavedForEgg(x: number, y: number, duck: Duck): void {
+    if (this.goldenEggCreditedDucks.has(duck)) return;
+
+    if (this.lives >= MAX_LIVES_CAP) {
+      this.goldenEggCreditedDucks.add(duck);
+      this.cancelGoldenEggRewardTimer();
+      this.goldenEggSaves = 0;
+      this.hud.setGoldenEggState('empty');
+      return;
     }
+
+    // Full egg reward countdown — wait until it finishes before counting new saves.
+    if (this.goldenEggRewardTimer) {
+      this.goldenEggCreditedDucks.add(duck);
+      return;
+    }
+
+    this.goldenEggCreditedDucks.add(duck);
+    this.goldenEggSaves += 1;
+
+    if (this.goldenEggSaves >= GOLDEN_EGG.savesRequired) {
+      this.goldenEggSaves = 0;
+      this.hud.setGoldenEggState('full');
+      this.hud.pulseGoldenEggFull();
+
+      this.goldenEggRewardTimer = this.time.delayedCall(
+        GOLDEN_EGG.fullDisplayMs,
+        () => {
+          this.goldenEggRewardTimer = null;
+          this.grantBonusLife(x, y, '#ffd700', false);
+          this.hud.setGoldenEggState('empty');
+          this.bottomToast.show({ text: 'Golden Egg! + 1 ♥' });
+        },
+      );
+      return;
+    }
+
+    this.hud.setGoldenEggState('half');
   }
 
   private onDuckMissed(payload: DuckMissedPayload): void {
-    if (this.calibrationMode) return;
+    if (this.calibrationMode || !isDuckMissForStats(payload.kind)) return;
 
     const { x, y } = payload;
 
-    recordDuckMissed(this.stats);
+    if (!isWatchModeActive()) {
+      recordDuckMissed(this.stats, payload.kind);
+    }
     burstSplash(this, x, y + 20);
 
-    if (this.isGameOver) return;
+    if (this.isGameOver || isWatchModeActive()) return;
 
     this.loseOneLife(x, y, {
       text: '-1 ♥',
@@ -557,7 +737,7 @@ export class GameScene extends Phaser.Scene {
 
   private resetCombo(): void {
     this.combo = 0;
-    this.comboTimer = 0;
+    this.comboDrainProgress = 0;
     this.hud.setCombo(0);
     this.events.emit(GameEvents.COMBO_CHANGED, 0);
   }
@@ -599,7 +779,41 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Small yellow X at the tap point for any bad tap. */
+  private showBadTapX(x: number, y: number): void {
+    const mark = this.add
+      .text(x, y - 6, 'X', {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#ffd700',
+        stroke: '#5a4a00',
+        strokeThickness: 2,
+      })
+      .setOrigin(0.5)
+      .setDepth(STAGE.hudDepth + 2);
+
+    mark.setScale(0.35);
+    this.tweens.add({
+      targets: mark,
+      scale: 1,
+      duration: 85,
+      ease: 'Back.easeOut',
+      onComplete: () => {
+        this.tweens.add({
+          targets: mark,
+          alpha: 0,
+          scale: 0.9,
+          duration: 320,
+          delay: 100,
+          onComplete: () => mark.destroy(),
+        });
+      },
+    });
+  }
+
   shutdown(): void {
+    this.musicManager?.clearPlaybackInterruptions();
     this.input.off('pointerdown', this.onPointerDown, this);
     this.input.off('pointerup', this.onPointerUp, this);
     this.events.off('duck-spawned', this.onDuckSpawned, this);
@@ -607,7 +821,10 @@ export class GameScene extends Phaser.Scene {
     this.events.off(GameEvents.DUCK_TAPPED, this.onDuckTapped, this);
     this.events.off(GameEvents.DUCK_SAVED, this.onDuckSaved, this);
     this.events.off(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
-    this.events.off(GameEvents.DECOY_TAPPED, this.onDecoyTapped, this);
+    this.events.off(GameEvents.EARLY_TAP, this.onEarlyTap, this);
+    this.events.off(GameEvents.CHARM_COLLECTED, this.onCharmCollected, this);
+    this.cancelGoldenEggRewardTimer();
+    this.bottomToast?.destroy();
     for (const balloon of this.activeBalloons) {
       balloon.destroy();
     }

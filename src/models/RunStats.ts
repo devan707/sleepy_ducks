@@ -1,6 +1,17 @@
+import type { DuckKind } from '../config/gameConfig';
+
+/** True when a duck reaching the mist should increment `ducksMissed` (not decoys). */
+export function isDuckMissForStats(kind: DuckKind): boolean {
+  return kind !== 'decoy';
+}
+
 export interface RunStats {
   ducksSaved: number;
   ducksMissed: number;
+  /** Early (pre-saveable) taps and empty gameplay taps. */
+  missedTaps: number;
+  /** Decoy taps. */
+  badTaps: number;
   longestCombo: number;
   timeSurvivedMs: number;
 }
@@ -9,6 +20,8 @@ export function createRunStats(): RunStats {
   return {
     ducksSaved: 0,
     ducksMissed: 0,
+    missedTaps: 0,
+    badTaps: 0,
     longestCombo: 0,
     timeSurvivedMs: 0,
   };
@@ -18,8 +31,17 @@ export function recordDuckSaved(stats: RunStats): void {
   stats.ducksSaved += 1;
 }
 
-export function recordDuckMissed(stats: RunStats): void {
+export function recordDuckMissed(stats: RunStats, kind: DuckKind): void {
+  if (!isDuckMissForStats(kind)) return;
   stats.ducksMissed += 1;
+}
+
+export function recordMissedTap(stats: RunStats): void {
+  stats.missedTaps += 1;
+}
+
+export function recordBadTapStat(stats: RunStats): void {
+  stats.badTaps += 1;
 }
 
 export function updateLongestCombo(stats: RunStats, combo: number): void {

@@ -8,7 +8,7 @@ import {
   PERSONAL_STAT_CARDS,
 } from '../storage/personalBests';
 import { getMusicVolume, getSfxVolume } from '../storage/audioSettings';
-import { isCharmCollected } from '../storage/charms';
+import { getCharmCount } from '../storage/charms';
 import { CharmsGrid } from './CharmsGrid';
 import {
   createBubbleStatCard,
@@ -341,10 +341,11 @@ export class SettingsDrawer {
 
     const hint = this.panel.getByName('charms-hint') as Phaser.GameObjects.Text | null;
     if (hint) {
+      const total = getCharmCount('moonflower');
       hint.setText(
-        isCharmCollected('moonflower')
-          ? 'Moonflower collected'
-          : 'Play at night to find\nthe Moonflower',
+        total > 0
+          ? `Moonflowers collected: ${total}`
+          : 'Play at night to collect\na Moonflower each run',
       );
     }
   }

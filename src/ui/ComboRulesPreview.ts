@@ -1,11 +1,10 @@
 import Phaser from 'phaser';
-import { COLORS, COMBO_UI } from '../config/gameConfig';
+import { COMBO_UI } from '../config/gameConfig';
 import { comboMultiplier } from '../scoring/runScore';
-
-const COMBO_GOLD = 0xf5b942;
-const PANEL_FILL = 0x0a2230;
-const TIMER_TRACK = 0x1e4a5c;
-const TIMER_FILL = 0xffc857;
+import {
+  drawComboPanelMeter,
+  getComboPanelTextLayout,
+} from '../objects/ComboCounter';
 
 /** In-game combo panel preview for the how-to-play screen. */
 export function addComboRulesPreview(
@@ -18,63 +17,47 @@ export function addComboRulesPreview(
   const sampleCombo = 5;
   const timerLeft = 0.62;
   const mult = comboMultiplier(sampleCombo);
+  const layout = getComboPanelTextLayout();
 
   const root = scene.add.container(centerX, topY);
   root.setScale(scale);
 
   const panel = scene.add.graphics();
-  const timerBar = scene.add.graphics();
-  const { width: w, height: h, radius: r } = COMBO_UI;
-
-  panel.fillStyle(PANEL_FILL, 0.88);
-  panel.fillRoundedRect(-w / 2, -h / 2, w, h, r);
-  panel.lineStyle(2.5, COMBO_GOLD, 0.95);
-  panel.strokeRoundedRect(-w / 2, -h / 2, w, h, r);
-  panel.lineStyle(1, 0xffffff, 0.12);
-  panel.strokeRoundedRect(-w / 2 + 3, -h / 2 + 3, w - 6, h - 6, r - 4);
-
-  const barW = COMBO_UI.width - 28;
-  const barH = 5;
-  const barX = -barW / 2;
-  const barY = COMBO_UI.height / 2 - 14;
-  const barRadius = barH / 2;
-
-  timerBar.fillStyle(TIMER_TRACK, 0.65);
-  timerBar.fillRoundedRect(barX, barY, barW, barH, barRadius);
-  timerBar.fillStyle(TIMER_FILL, 0.95);
-  timerBar.fillRoundedRect(barX, barY, barW * timerLeft, barH, barRadius);
+  drawComboPanelMeter(panel, timerLeft);
 
   const labelText = scene.add
-    .text(0, -26, 'COMBO', {
+    .text(0, layout.labelY, 'COMBO', {
       fontFamily: 'system-ui, -apple-system, sans-serif',
-      fontSize: '13px',
+      fontSize: `${layout.labelSize}px`,
       fontStyle: 'bold',
-      color: '#f8d78a',
+      color: '#fff8d0',
       letterSpacing: 4,
     })
     .setOrigin(0.5);
 
   const valueText = scene.add
-    .text(0, 2, String(sampleCombo), {
+    .text(0, layout.valueY, String(sampleCombo), {
       fontFamily: 'system-ui, -apple-system, sans-serif',
-      fontSize: '44px',
+      fontSize: `${layout.valueSize}px`,
       fontStyle: 'bold',
-      color: '#ffffff',
+      color: '#fffef0',
       stroke: '#5a3d08',
       strokeThickness: 5,
     })
     .setOrigin(0.5);
 
   const multText = scene.add
-    .text(0, 30, `×${mult.toFixed(1)} combo`, {
+    .text(0, layout.multY, `×${mult.toFixed(1)} combo`, {
       fontFamily: 'system-ui, -apple-system, sans-serif',
-      fontSize: '14px',
+      fontSize: `${layout.multSize}px`,
       fontStyle: 'bold',
-      color: COLORS.combo,
+      color: '#ffdd55',
+      stroke: '#5a3d08',
+      strokeThickness: 3,
     })
     .setOrigin(0.5);
 
-  root.add([panel, timerBar, labelText, valueText, multText]);
+  root.add([panel, labelText, valueText, multText]);
   parent.add(root);
 
   return COMBO_UI.height * scale;

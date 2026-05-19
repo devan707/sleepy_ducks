@@ -11,11 +11,12 @@ export type SoundId =
   | 'wake'
   | 'goldenWake'
   | 'miss'
-  | 'combo'
   | 'lifeLost'
   | 'gameOver'
   | 'tap'
   | 'bad'
+  | 'badTap'
+  | 'earlyBuzzer'
   | 'bonus';
 
 let instance: SoundManager | null = null;
@@ -142,6 +143,215 @@ export class SoundManager {
     }
 
     return this.ctx;
+  }
+
+  /** Harsh on/off buzzer for tapping a duck before it is saveable. */
+  private playTooEarlyBuzzer(): void {
+    const ctx = this.resumeContext();
+    if (!ctx) return;
+
+    const run = () => {
+      const t0 = ctx.currentTime;
+      const duration = 0.34;
+      const peak = this.scaledGain(0.13);
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 262;
+
+      gain.gain.setValueAtTime(0, t0);
+      const flutterHz = 16;
+      const steps = Math.floor(duration * flutterHz);
+      for (let i = 0; i < steps; i++) {
+        const step = t0 + i / flutterHz;
+        gain.gain.setValueAtTime(i % 2 === 0 ? peak : peak * 0.35, step);
+      }
+      gain.gain.setValueAtTime(peak * 0.2, t0 + duration - 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + duration + 0.02);
+    };
+
+    if (ctx.state === 'running') {
+      run();
+      return;
+    }
+    void ctx.resume().then(() => {
+      if (ctx.state === 'running') run();
+    });
+  }
+
+  /** Missed tap — airy whiff with a soft sploosh (empty space, decoy, etc.). */
+  private playBadTapWhiff(): void {
+    const ctx = this.resumeContext();
+    if (!ctx) return;
+
+    const run = () => {
+      const t0 = ctx.currentTime;
+      const dur = 0.17;
+      const peak = this.scaledGain(0.15);
+
+      const sampleCount = Math.floor(ctx.sampleRate * dur);
+      const buffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate);
+      const samples = buffer.getChannelData(0);
+      for (let i = 0; i < sampleCount; i++) {
+        const env = 1 - i / sampleCount;
+        samples[i] = (Math.random() * 2 - 1) * env * env;
+      }
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const bandpass = ctx.createBiquadFilter();
+      bandpass.type = 'bandpass';
+      bandpass.frequency.setValueAtTime(1400, t0);
+      bandpass.frequency.exponentialRampToValueAtTime(320, t0 + dur);
+      bandpass.Q.value = 0.55;
+
+      const noiseGain = ctx.createGain();
+      noiseGain.gain.setValueAtTime(peak, t0);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, t0 + dur + 0.02);
+
+      noise.connect(bandpass);
+      bandpass.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      noise.start(t0);
+      noise.stop(t0 + dur + 0.03);
+
+      const thump = ctx.createOscillator();
+      const thumpGain = ctx.createGain();
+      thump.type = 'sine';
+      thump.frequency.setValueAtTime(200, t0);
+      thump.frequency.exponentialRampToValueAtTime(55, t0 + 0.11);
+      thumpGain.gain.setValueAtTime(peak * 0.4, t0);
+      thumpGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.13);
+      thump.connect(thumpGain);
+      thumpGain.connect(ctx.destination);
+      thump.start(t0);
+      thump.stop(t0 + 0.14);
+    };
+
+    if (ctx.state === 'running') {
+      run();
+      return;
+    }
+    void ctx.resume().then(() => {
+      if (ctx.state === 'running') run();
+    });
+  }
+
+  /** Bright chime when the combo meter appears. */
+  private playComboStartChime(): void {
+    this.playScheduledChime(
+      [
+        { freq: 523, delay: 0, dur: 0.16 },
+        { freq: 659, delay: 0.09, dur: 0.16 },
+        { freq: 784, delay: 0.18, dur: 0.18 },
+        { freq: 1047, delay: 0.3, dur: 0.22 },
+        { freq: 1319, delay: 0.44, dur: 0.24, gainMult: 0.85 },
+      ],
+      0.2,
+    );
+  }
+
+  /** Escalating fanfare at 5 / 10 / 20 / 30 / 50 combo. */
+  private playComboMilestoneChime(tier: number): void {
+    const baseNotes = [784, 880, 988, 1047, 1175, 1319, 1568, 1760];
+    const noteCount = 3 + tier;
+    const notes: Array<{ freq: number; delay: number; dur: number; gainMult?: number }> = [];
+
+    for (let i = 0; i < noteCount; i++) {
+      notes.push({
+        freq: baseNotes[i % baseNotes.length] * (i >= baseNotes.length ? 1.25 : 1),
+        delay: i * 0.075,
+        dur: 0.12 + tier * 0.025,
+      });
+    }
+
+    const chordAt = noteCount * 0.075;
+    if (tier >= 1) {
+      notes.push({ freq: 988, delay: chordAt, dur: 0.22 + tier * 0.04, gainMult: 0.9 });
+      notes.push({ freq: 1175, delay: chordAt, dur: 0.22 + tier * 0.04, gainMult: 0.9 });
+    }
+    if (tier >= 2) {
+      notes.push({ freq: 1319, delay: chordAt, dur: 0.22 + tier * 0.04, gainMult: 0.85 });
+    }
+    if (tier >= 3) {
+      notes.push({ freq: 1568, delay: chordAt + 0.14, dur: 0.32, gainMult: 0.95 });
+    }
+    if (tier >= 4) {
+      notes.push({ freq: 1760, delay: chordAt + 0.14, dur: 0.36, gainMult: 1 });
+      notes.push({ freq: 2093, delay: chordAt + 0.28, dur: 0.42, gainMult: 0.9 });
+    }
+
+    this.playScheduledChime(notes, 0.15 + tier * 0.028);
+  }
+
+  private playScheduledChime(
+    notes: ReadonlyArray<{ freq: number; delay: number; dur: number; gainMult?: number }>,
+    masterGain: number,
+  ): void {
+    const ctx = this.resumeContext();
+    if (!ctx) return;
+
+    const run = () => {
+      const t0 = ctx.currentTime;
+      const peak = this.scaledGain(masterGain);
+      for (const note of notes) {
+        this.scheduleChimeTone(
+          ctx,
+          t0 + note.delay,
+          note.freq,
+          note.dur,
+          peak * (note.gainMult ?? 1),
+        );
+      }
+    };
+
+    if (ctx.state === 'running') {
+      run();
+      return;
+    }
+    void ctx.resume().then(() => {
+      if (ctx.state === 'running') run();
+    });
+  }
+
+  private scheduleChimeTone(
+    ctx: AudioContext,
+    start: number,
+    freq: number,
+    dur: number,
+    peak: number,
+  ): void {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, start);
+    g.gain.setValueAtTime(0.0001, start);
+    g.gain.linearRampToValueAtTime(peak, start + 0.014);
+    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    osc.connect(g);
+    g.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + dur + 0.05);
+  }
+
+  /** Combo meter start or milestone fanfare (tier 0 = 5 combo … 4 = 50). */
+  playComboReward(kind: 'start' | 'milestone', milestoneTier = 0): void {
+    if (!this.sfxEnabled) return;
+    this.tryUnlock();
+    if (kind === 'start') {
+      this.playComboStartChime();
+    } else {
+      this.playComboMilestoneChime(
+        Phaser.Math.Clamp(Math.floor(milestoneTier), 0, 4),
+      );
+    }
   }
 
   private beep(
@@ -369,9 +579,6 @@ export class SoundManager {
       case 'miss':
         this.beep(180, 0.2, 'sawtooth', 0.1);
         break;
-      case 'combo':
-        this.beep(400 + Math.random() * 80, 0.07);
-        break;
       case 'lifeLost':
         this.beep(120, 0.25, 'square', 0.09);
         break;
@@ -384,6 +591,12 @@ export class SoundManager {
         break;
       case 'bad':
         this.beep(140, 0.22, 'sawtooth', 0.12);
+        break;
+      case 'badTap':
+        this.playBadTapWhiff();
+        break;
+      case 'earlyBuzzer':
+        this.playTooEarlyBuzzer();
         break;
       case 'bonus':
         this.beep(660, 0.08, 'sine', 0.12);

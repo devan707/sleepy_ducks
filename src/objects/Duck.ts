@@ -6,7 +6,6 @@ import {
   isGoldenWakeTexture,
   isMaleWakeTexture,
   resolveDuckSpriteSet,
-  resolveMallardCrest,
   wakeStartFrameName,
   type DuckSpriteSet,
 } from '../config/duckSprites';
@@ -26,11 +25,19 @@ import type { MotionDifficulty } from '../systems/DifficultyManager';
 import { getCrestApproachPosition } from './EnvironmentLayout';
 import type { StageLayout, WaterfallStage } from './WaterfallStage';
 
+function isWakeTextureKey(textureKey: string): boolean {
+  return (
+    isMaleWakeTexture(textureKey) ||
+    isFemaleWakeTexture(textureKey) ||
+    isGoldenWakeTexture(textureKey)
+  );
+}
+
 export type { DuckKind, DuckSex };
 export type DuckLifecycle = 'sleeping' | 'waking' | 'escaping' | 'gone';
 export type DuckMotionPhase = 'cresting' | 'falling';
 export type GoldenMotionPhase = 'braking' | 'wake-play' | 'ascend';
-export type DuckTapResult = 'none' | 'partial' | 'woke' | 'decoy';
+export type DuckTapResult = 'none' | 'partial' | 'woke' | 'early';
 
 export interface DuckSavedPayload {
   duck: Duck;
@@ -43,6 +50,14 @@ export interface DuckMissedPayload {
   kind: DuckKind;
   x: number;
   y: number;
+}
+
+export interface DuckEarlyTapPayload {
+  duck: Duck;
+  x: number;
+  y: number;
+  /** False for heavy-sleeper conversion taps (those use partial-tap instead). */
+  breaksCombo: boolean;
 }
 
 export class Duck extends Phaser.GameObjects.Container {
@@ -64,7 +79,7 @@ export class Duck extends Phaser.GameObjects.Container {
 
   private tapsReceived = 0;
   private lastHeavyTapAtMs = 0;
-  private readonly tapsRequired: number;
+  private tapsRequired: number;
   private readonly pointsMultiplier: number;
   private readonly crestDurationScale: number;
 
@@ -83,6 +98,9 @@ export class Duck extends Phaser.GameObjects.Container {
   /** Heavy duck switched to normal asleep art after first tap. */
   private mallardCrestActive = false;
   private lastAppliedDepth = -1;
+  private earlyTapPausedUntilMs = 0;
+  private isEarlyTapWakePose = false;
+  private earlyTapResumeTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -154,6 +172,8 @@ export class Duck extends Phaser.GameObjects.Container {
   }
 
   destroy(fromScene?: boolean): void {
+    this.earlyTapResumeTimer?.remove(false);
+    this.earlyTapResumeTimer = null;
     this.unbindAnimSizing();
     super.destroy(fromScene);
   }
@@ -162,9 +182,40 @@ export class Duck extends Phaser.GameObjects.Container {
     return this.lifecycle === 'sleeping';
   }
 
+  /** Whether a cresting too-early tap should break the player's combo. */
+  doesEarlyTapBreakCombo(): boolean {
+    if (this.kind === 'normal') return true;
+    if (this.kind === 'heavy' && this.mallardCrestActive) return true;
+    return false;
+  }
+
+  /** True once the duck has gone over the lip and can be rescued (normal / heavy). */
+  isSaveable(): boolean {
+    if (this.isEarlyTapLocked()) return false;
+    if (
+      !this.isSleeping() ||
+      this.motionPhase !== 'falling' ||
+      this.kind === 'golden' ||
+      this.kind === 'decoy'
+    ) {
+      return false;
+    }
+    return this.y >= this.lipYAtDuck() + DUCK.saveableBelowLipMin;
+  }
+
+  /** Too-early penalty in progress — no taps or crest/fall advances for this duck. */
+  isEarlyTapLocked(): boolean {
+    return (
+      this.isEarlyTapWakePose ||
+      this.scene.time.now < this.earlyTapPausedUntilMs
+    );
+  }
+
   canReceiveTap(): boolean {
+    if (this.kind === 'decoy') return false;
     if (!this.isSleeping()) return false;
     if (this.scene.time.now - this.spawnedAtMs < DUCK.saveGraceMs) return false;
+    if (this.isEarlyTapLocked()) return false;
 
     if (
       this.kind === 'heavy' &&
@@ -237,9 +288,7 @@ export class Duck extends Phaser.GameObjects.Container {
     if (this.lifecycle === 'sleeping') {
       if (this.kind === 'golden') {
         this.updateGoldenSkyFall(delta);
-        if (this.y > this.layout.mistZoneTop) {
-          this.triggerMissed();
-        }
+        this.checkFallenIntoMist();
       } else {
         this.updateSleepingMotion(delta);
       }
@@ -285,28 +334,39 @@ export class Duck extends Phaser.GameObjects.Container {
 
   private beginFreefall(): void {
     if (this.motionPhase === 'falling') return;
+    if (this.isEarlyTapLocked()) return;
     this.motionPhase = 'falling';
     const lipY = this.lipYAtDuck();
     this.y = lipY + this.layout.lipFallThreshold + 1;
     this.fallVelocity = 0;
+    this.isEarlyTapWakePose = false;
     this.showFullBody();
+    if (isWakeTextureKey(this.sprite.texture.key)) {
+      this.playCrestVisual();
+    }
+    this.setScale(this.getVisualScale());
     this.applyDepth();
   }
 
   private updateSleepingMotion(delta: number): void {
     if (this.motionPhase === 'cresting') {
-      const dt = delta / this.crestDurationMs;
-      this.crestProgress = Math.min(1, this.crestProgress + dt * 0.72);
+      const locked = this.isEarlyTapLocked();
+      if (!locked) {
+        const dt = delta / this.crestDurationMs;
+        this.crestProgress = Math.min(1, this.crestProgress + dt * 0.72);
+      }
 
       this.applyCrestPosition();
       this.applyCrestVisuals();
 
-      if (this.hasReachedCrest()) {
+      if (!locked && this.hasReachedCrest()) {
         this.beginFreefall();
       }
+      return;
     }
 
     if (this.motionPhase === 'falling') {
+      if (this.isEarlyTapLocked()) return;
       this.fallVelocity = Math.min(
         this.maxFallVelocity,
         this.fallVelocity + (this.gravity * delta) / 1000,
@@ -316,10 +376,21 @@ export class Duck extends Phaser.GameObjects.Container {
       this.setScale(this.getVisualScale());
       this.applyDepth();
 
-      if (this.y > this.layout.mistZoneTop) {
-        this.triggerMissed();
-      }
+      this.checkFallenIntoMist();
     }
+  }
+
+  /** Past the mist line: decoys vanish silently; real ducks count as missed. */
+  private checkFallenIntoMist(): void {
+    if (this.y <= this.layout.mistZoneTop) return;
+    if (this.kind === 'decoy') {
+      if (this.lifecycle !== 'sleeping') return;
+      this.lifecycle = 'gone';
+      this.disableInteractive();
+      this.destroy();
+      return;
+    }
+    this.triggerMissed();
   }
 
   /** Golden ducks: straight-down dive from above the screen. */
@@ -465,24 +536,24 @@ export class Duck extends Phaser.GameObjects.Container {
   private handleTap(): DuckTapResult {
     if (!this.canReceiveTap()) return 'none';
 
-    if (this.kind === 'decoy') {
-      this.scene.events.emit(GameEvents.DECOY_TAPPED, {
-        duck: this,
-        x: this.x,
-        y: this.y,
-      });
-      this.lifecycle = 'gone';
-      this.destroy();
-      return 'decoy';
+    if (this.kind === 'heavy' && !this.mallardCrestActive) {
+      this.convertHeavyToMallardSleeper();
+      this.playCrestVisual();
+      this.applyCrestVisuals();
+      this.setScale(this.getVisualScale());
+      this.pulseTap();
+      this.scene.events.emit('duck-partial-tap', this);
+      return 'partial';
+    }
+
+    if (this.kind !== 'golden' && !this.isSaveable()) {
+      this.handleEarlyTap();
+      return 'early';
     }
 
     this.tapsReceived += 1;
 
     if (this.tapsReceived < this.tapsRequired) {
-      if (this.kind === 'heavy') {
-        this.lastHeavyTapAtMs = this.scene.time.now;
-        this.switchToMallardCrestAfterFirstTap();
-      }
       this.pulseTap();
       this.scene.events.emit('duck-partial-tap', this);
       return 'partial';
@@ -497,30 +568,15 @@ export class Duck extends Phaser.GameObjects.Container {
     return 'woke';
   }
 
-  /** Heavy sleepers show deep-sleep art until first tap, then normal asleep look. */
-  private switchToMallardCrestAfterFirstTap(): void {
-    this.mallardCrestActive = true;
-    const mallard = resolveMallardCrest(this.scene, this.sex);
-    this.sprites = {
-      ...this.sprites,
-      crestTexture: mallard.crestTexture,
-      crestAnimKey: mallard.crestAnimKey,
-    };
+  /** Heavy → normal sleeper look (no hat/mask); one falling tap saves after this. */
+  private convertHeavyToMallardSleeper(): void {
+    if (this.kind !== 'heavy' || this.mallardCrestActive) return;
 
+    this.mallardCrestActive = true;
+    this.tapsRequired = 1;
+    this.sprites = resolveDuckSpriteSet(this.scene, this.sex, 'normal');
     this.crestMaskApplied = false;
     this.crestMaskTextureKey = null;
-    this.clearLipMask();
-    this.showFullBody();
-    this.playCrestVisual();
-    this.applyKindVisual();
-
-    this.crestProgress = Math.max(
-      this.crestProgress,
-      STAGE.lipCrestDepthThreshold,
-    );
-    this.setScale(this.getVisualScale());
-    this.lastAppliedDepth = STAGE.duckDepthFront;
-    this.setDepth(STAGE.duckDepthFront);
   }
 
   private pulseTap(): void {
@@ -530,6 +586,94 @@ export class Duck extends Phaser.GameObjects.Container {
       scaleY: this.sprite.scaleY * 1.08,
       duration: 70,
       yoyo: true,
+    });
+  }
+
+  private handleEarlyTap(): void {
+    this.isEarlyTapWakePose = true;
+    this.earlyTapPausedUntilMs = this.scene.time.now + DUCK.earlyTapPauseMs;
+    this.showEarlyTapWakePose();
+    this.flashEarlyTapYellow();
+
+    this.earlyTapResumeTimer?.remove(false);
+    this.earlyTapResumeTimer = this.scene.time.delayedCall(
+      DUCK.earlyTapPauseMs,
+      () => {
+        this.earlyTapResumeTimer = null;
+        this.resumeCrestAfterEarlyTap();
+      },
+    );
+
+    const payload: DuckEarlyTapPayload = {
+      duck: this,
+      x: this.x,
+      y: this.y,
+      breaksCombo: this.doesEarlyTapBreakCombo(),
+    };
+    this.scene.events.emit(GameEvents.EARLY_TAP, payload);
+  }
+
+  /** Hold first wake frame (eyes open) for the early-tap pause. */
+  private showEarlyTapWakePose(): void {
+    const { wakeTexture } = this.sprites;
+    if (!wakeTexture || !this.scene.textures.exists(wakeTexture)) return;
+
+    this.isEarlyTapWakePose = true;
+    this.unbindAnimSizing();
+    this.clearLipMask();
+    this.showFullBody();
+    this.sprite.setFlipX(false);
+    this.sprite.anims.stop();
+
+    const frame = wakeStartFrameName(wakeTexture);
+    this.sprite.setTexture(wakeTexture, frame);
+    this.applyKindVisual();
+    this.fitSpriteToDisplay();
+    this.setScale(this.getVisualScale());
+    this.applyDepth();
+  }
+
+  private resumeCrestAfterEarlyTap(): void {
+    if (!this.isSleeping()) {
+      this.isEarlyTapWakePose = false;
+      return;
+    }
+
+    this.isEarlyTapWakePose = false;
+    this.restoreSleepingVisualAfterEarlyTap();
+  }
+
+  /** Swap wake penalty frame back to asleep crest art (cresting or falling). */
+  private restoreSleepingVisualAfterEarlyTap(): void {
+    this.unbindAnimSizing();
+    this.sprite.anims.stop();
+    this.sprite.setFlipX(false);
+
+    if (this.motionPhase === 'falling') {
+      this.showFullBody();
+      this.playCrestVisual();
+    } else {
+      this.playCrestVisual();
+      this.applyCrestVisuals();
+    }
+
+    this.setScale(this.getVisualScale());
+    this.applyDepth();
+  }
+
+  private flashEarlyTapYellow(): void {
+    this.sprite.setTint(0xffe566);
+    this.scene.tweens.add({
+      targets: this.sprite,
+      alpha: { from: 1, to: 0.85 },
+      duration: 60,
+      yoyo: true,
+      repeat: 1,
+      onComplete: () => {
+        this.sprite.clearTint();
+        this.sprite.setAlpha(1);
+        this.applyKindVisual();
+      },
     });
   }
 
@@ -683,7 +827,7 @@ export class Duck extends Phaser.GameObjects.Container {
   }
 
   private applyCrestVisuals(): void {
-    if (!this.mallardCrestActive) {
+    if (!this.mallardCrestActive && !this.isEarlyTapWakePose) {
       this.ensureCrestMask();
     }
     this.setScale(this.getVisualScale());

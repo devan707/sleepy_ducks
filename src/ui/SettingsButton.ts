@@ -38,6 +38,15 @@ export class SettingsButton {
     return true;
   }
 
+  /** True when a gameplay tap lands on the settings gear (exclude from empty-tap penalty). */
+  static hitsWorldPoint(worldX: number, worldY: number): boolean {
+    const pos = getDefaultSettingsButtonPosition();
+    const r = RADIUS + 6;
+    const dx = worldX - pos.x;
+    const dy = worldY - pos.y;
+    return dx * dx + dy * dy <= r * r;
+  }
+
   constructor(scene: Phaser.Scene, opts: SettingsButtonOptions) {
     this.scene = scene;
     this.drawer = opts.drawer;

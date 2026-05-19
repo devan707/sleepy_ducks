@@ -56,6 +56,10 @@ export const STAGE = {
   lipMaskInsetY: 0,
   mistDepth: 60,
   hudDepth: 100,
+  /** Combo meter — above base HUD, below toasts. */
+  depthComboHud: 101,
+  /** Bottom gameplay toasts — above HUD, combo, and settings gear. */
+  depthGameplayToast: 115,
   /** Heart balloon floats above gameplay ducks. */
   balloonDepth: 90,
   /** Moonflower collectible on the left cliff. */
@@ -92,13 +96,24 @@ export const DUCK_SPAWN_PROFILES: readonly {
   { sex: 'female', kind: 'heavy', weight: 0.14 },
 ];
 
-/** Independent roll before mallard table. */
-export const SPAWN_DECOY_CHANCE = 0.12;
+/** Decoys use a separate spawn clock — never mixed into the mallard schedule. */
+export const DECOY_SPAWN = {
+  /** Decoys can spawn from run start. */
+  minElapsedSec: 0,
+  intensityStepSec: 10,
+  intensityRampSec: 60,
+  /** Ms between decoy spawns at 0s, 10s, 20s … 60s. */
+  intervalByStep: [8000, 7000, 6000, 5000, 4000, 3000, 2000] as const,
+  /** Max decoys on screen at the same steps. */
+  maxConcurrentByStep: [1, 1, 1, 2, 2, 2, 3] as const,
+  minIntervalMs: 2000,
+  postRampIntervalSec: 60,
+} as const;
 
-/** Golden skyfall only after losing a life (still alive). */
+/** Golden skyfall within 6s after a duck is missed (life lost, still alive). */
 export const GOLDEN_REWARD = {
-  minDelayMs: 1_000,
-  maxDelayMs: 10_000,
+  minDelayMs: 800,
+  maxDelayMs: 6_000,
 } as const;
 
 export const MAX_LIVES = 3;
@@ -106,7 +121,35 @@ export const MAX_LIVES = 3;
 export const MAX_LIVES_CAP = 5;
 export const BASE_POINTS = 100;
 export const GOLDEN_POINTS_MULTIPLIER = 3;
-export const COMBO_TIMEOUT_MS = 2000;
+
+/** Golden duck saves fill the egg; full egg grants +1 life. */
+export const GOLDEN_EGG = {
+  savesRequired: 2,
+  /** Full golden egg on screen before the reward toast. */
+  fullDisplayMs: 1500,
+} as const;
+
+export const COMBO = {
+  /** Reference window — actual drain scales with spawn difficulty. */
+  baseTimeoutMs: 2000,
+  /** Drain multiplier at run start (lower = meter empties slower). */
+  drainMultAtStart: 0.5,
+  /** Drain multiplier when spawn rate is at peak. */
+  drainMultAtPeak: 1.45,
+  /** Combo counts that trigger a celebration sound + burst. */
+  milestones: [5, 10, 20, 30, 50] as const,
+} as const;
+
+export type ComboMilestone = (typeof COMBO.milestones)[number];
+
+/** 0 = 5-combo … 4 = 50-combo; null if not a milestone. */
+export function getComboMilestoneTier(combo: number): number | null {
+  const idx = COMBO.milestones.indexOf(combo as ComboMilestone);
+  return idx >= 0 ? idx : null;
+}
+
+/** @deprecated Use COMBO.baseTimeoutMs */
+export const COMBO_TIMEOUT_MS = COMBO.baseTimeoutMs;
 
 /** Per-duck score multipliers (see `scoring/runScore.ts`). */
 export const SCORING = {
@@ -137,10 +180,10 @@ export const BALLOON = {
 } as const;
 
 export const COMBO_UI = {
-  y: GAME_HEIGHT - 132,
-  width: 148,
-  height: 76,
-  radius: 18,
+  y: GAME_HEIGHT - 129,
+  width: 207,
+  height: 107,
+  radius: 25,
 } as const;
 
 export const COLORS = {
@@ -217,23 +260,64 @@ export const DAY_NIGHT = {
   starSkyMaxY: GAME_HEIGHT * 0.52,
 } as const;
 
+/** Elapsed run seconds when the sun reaches the crest (SUNSET event). */
+export function getSunsetElapsedSec(): number {
+  return DAY_NIGHT.sunSetDurationSec - DAY_NIGHT.sunSetStartOffsetSec;
+}
+
+/** Bottom-screen toast panels (moonflower hint, rewards, etc.). */
+export const GAMEPLAY_TOAST = {
+  panelAlpha: 0.72,
+  durationMs: 1500,
+  fadeInMs: 120,
+  fadeOutMs: 200,
+  panelMinWidth: 260,
+  panelHeight: 64,
+  panelPadX: 14,
+  imageSize: 36,
+  imageGap: 10,
+  /** Gap between combo panel bottom and toast top. */
+  gapBelowCombo: 10,
+} as const;
+
+/** Y center for bottom toasts — sits just under the combo meter slot. */
+export function getGameplayToastY(): number {
+  const { gapBelowCombo, panelHeight } = GAMEPLAY_TOAST;
+  const comboBottom = COMBO_UI.y + COMBO_UI.height / 2;
+  const idealY = comboBottom + gapBelowCombo + panelHeight / 2;
+  const screenMax = GAME_HEIGHT - panelHeight / 2 - 8;
+  return Math.min(idealY, screenMax);
+}
+
+export const MOONFLOWER_HINT = {
+  secBeforeSunset: 7,
+} as const;
+
+export function getMoonflowerHintAtSec(): number {
+  return getSunsetElapsedSec() - MOONFLOWER_HINT.secBeforeSunset;
+}
+
 export const DIFFICULTY = {
-  baseCrestDurationMs: 2200,
-  minCrestDurationMs: 1500,
-  crestDurationRamp: 18,
-  baseGravity: 220,
-  maxGravity: 620,
-  gravityRamp: 5,
   maxFallVelocity: 780,
   lipFallKickVelocity: 0,
-  baseSpawnInterval: 1800,
-  minSpawnInterval: 600,
-  intervalRamp: 18,
-  /** Sleeping ducks on screen at once (ramps smoothly with elapsed time). */
-  maxConcurrentBase: 2,
-  maxConcurrentCap: 6,
-  /** Seconds of run time to reach maxConcurrentCap. */
-  concurrentRampSec: 180,
+  minSpawnInterval: 520,
+  minCrestDurationMs: 1500,
+  maxGravity: 620,
+  /** Every N seconds, intensity steps up for the first minute. */
+  intensityStepSec: 10,
+  intensityRampSec: 60,
+  /** Spawn interval (ms) at 0s, 10s, 20s … 60s. */
+  spawnIntervalByStep: [1700, 1450, 1200, 1020, 880, 760, 660] as const,
+  /** Max sleeping ducks at 0s, 10s, 20s … 60s. */
+  maxConcurrentByStep: [3, 3, 4, 5, 6, 6, 7] as const,
+  /** Crest cycle length (ms) at each step — shorter = ducks reach lip sooner. */
+  crestDurationByStep: [2250, 2100, 1950, 1820, 1680, 1570, 1500] as const,
+  /** Fall gravity at each step. */
+  gravityByStep: [215, 235, 260, 290, 325, 365, 400] as const,
+  /** Ducks on the lane when a run begins (keep low for a gentle open). */
+  initialSpawnCount: 2,
+  /** After 60s, spawn interval eases down to minSpawnInterval over this duration. */
+  postRampSpawnIntervalSec: 90,
 } as const;
 
 export const DUCK = {
@@ -273,6 +357,10 @@ export const DUCK = {
   saveGraceMs: 1000,
   /** Max finger movement (px) between down and up to count as a tap. */
   tapSlopPx: 48,
+  /** Crest freeze after tapping a duck before it is saveable (eyes-open wake pose). */
+  earlyTapPauseMs: 1000,
+  /** Min px below the lip (container y) before a falling duck can be saved. */
+  saveableBelowLipMin: 14,
   minSpawnSeparationX: 56,
   spawnPositionAttempts: 16,
 } as const;
@@ -354,17 +442,7 @@ export const MOONFLOWER = {
   swayFrameRate: 8,
 } as const;
 
+/** @deprecated Use GAMEPLAY_TOAST — kept for MoonflowerCollectToast layout hints. */
 export const MOONFLOWER_COLLECT_TOAST = {
-  y: 132,
-  panelWidth: 272,
-  panelHeight: 76,
-  panelAlpha: 0.82,
-  flowerHeight: 48,
-  flowerInsetLeft: 44,
-  textInsetLeft: 86,
-  textInsetRight: 16,
-  startScale: 0.88,
-  fadeInMs: 280,
-  holdMs: 1600,
-  fadeOutMs: 360,
+  flowerHeight: 36,
 } as const;

@@ -44,6 +44,8 @@ export class GameOverScene extends Phaser.Scene {
       musicManager: this.musicManager,
       soundManager: this.soundManager,
       musicContext: 'gameOver',
+      onOpen: () => this.musicManager.pauseForInterruption(),
+      onClose: () => this.musicManager.resumeFromInterruption(),
     });
     this.settingsButton = new SettingsButton(this, {
       drawer: this.settingsDrawer,
@@ -162,6 +164,7 @@ export class GameOverScene extends Phaser.Scene {
     const lines = [
       `Ducks saved: ${stats.ducksSaved}`,
       `Ducks missed: ${stats.ducksMissed}`,
+      `Bad taps: ${stats.missedTaps}`,
       `Longest combo: ${stats.longestCombo}`,
       `Time survived: ${formatSurvivalTime(stats.timeSurvivedMs)}`,
     ];

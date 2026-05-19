@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import {
+  DECOY_SPAWN,
   DUCK,
   DUCK_SPAWN_PROFILES,
+  DIFFICULTY,
   GOLDEN_REWARD,
-  SPAWN_DECOY_CHANCE,
   type DuckKind,
   type DuckSex,
 } from '../config/gameConfig';
@@ -12,9 +13,10 @@ import { createDuck } from '../objects/DuckFactory';
 import type { StageLayout, WaterfallStage } from '../objects/WaterfallStage';
 import type { DifficultyManager } from './DifficultyManager';
 
-export type SpawnPick =
-  | { entity: 'duck'; sex: DuckSex; kind: DuckKind }
-  | { entity: 'decoy' };
+export type MallardSpawnPick = {
+  sex: DuckSex;
+  kind: Exclude<DuckKind, 'golden' | 'decoy'>;
+};
 
 export class SpawnController {
   private scene: Phaser.Scene;
@@ -23,6 +25,7 @@ export class SpawnController {
   private layout: StageLayout;
   private waterfallStage: WaterfallStage;
   private timer: Phaser.Time.TimerEvent | null = null;
+  private decoyTimer: Phaser.Time.TimerEvent | null = null;
   private goldenTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor(
@@ -40,13 +43,21 @@ export class SpawnController {
   }
 
   start(): void {
-    this.scheduleNext();
+    for (let i = 0; i < DIFFICULTY.initialSpawnCount; i++) {
+      this.spawnMallard();
+    }
+    this.scheduleNextMallard();
+    this.scheduleNextDecoy();
   }
 
   stop(): void {
     if (this.timer) {
       this.timer.remove(false);
       this.timer = null;
+    }
+    if (this.decoyTimer) {
+      this.decoyTimer.remove(false);
+      this.decoyTimer = null;
     }
     this.cancelGoldenReward();
   }
@@ -102,45 +113,77 @@ export class SpawnController {
     this.scene.events.emit('duck-spawned', duck);
   }
 
-  private scheduleNext(): void {
+  private scheduleNextMallard(): void {
     const delay = this.difficulty.getSpawnIntervalMs();
     this.timer = this.scene.time.addEvent({
       delay,
-      callback: () => this.trySpawn(),
+      callback: () => this.trySpawnMallard(),
       callbackScope: this,
     });
   }
 
-  private trySpawn(): void {
-    const max = this.difficulty.getMaxConcurrent();
-    const alive = this.ducks.getChildren().filter((c) => {
-      const duck = c as unknown as Duck;
-      return duck.active && duck.isSleeping();
-    }).length;
+  private scheduleNextDecoy(): void {
+    const elapsed = this.difficulty.elapsedSeconds;
+    const delay =
+      elapsed < DECOY_SPAWN.minElapsedSec
+        ? Math.max(250, (DECOY_SPAWN.minElapsedSec - elapsed) * 1000)
+        : this.difficulty.getDecoySpawnIntervalMs();
 
-    if (alive < max) {
-      this.spawnEntity();
-    }
-    this.scheduleNext();
+    this.decoyTimer = this.scene.time.addEvent({
+      delay,
+      callback: () => {
+        this.trySpawnDecoy();
+        this.scheduleNextDecoy();
+      },
+      callbackScope: this,
+    });
   }
 
-  pickSpawn(): SpawnPick {
-    const r = Math.random();
-    if (r < SPAWN_DECOY_CHANCE) {
-      return { entity: 'decoy' };
-    }
+  private countSleepingMallards(): number {
+    return (this.ducks.getChildren() as Duck[]).filter(
+      (d) =>
+        d.active &&
+        d.isSleeping() &&
+        d.kind !== 'decoy' &&
+        d.kind !== 'golden',
+    ).length;
+  }
 
+  private countSleepingDecoys(): number {
+    return (this.ducks.getChildren() as Duck[]).filter(
+      (d) => d.active && d.isSleeping() && d.kind === 'decoy',
+    ).length;
+  }
+
+  private trySpawnMallard(): void {
+    const max = this.difficulty.getMaxConcurrent();
+    if (this.countSleepingMallards() < max) {
+      this.spawnMallard();
+    }
+    this.scheduleNextMallard();
+  }
+
+  private trySpawnDecoy(): void {
+    if (this.difficulty.elapsedSeconds < DECOY_SPAWN.minElapsedSec) return;
+
+    const maxDecoys = this.difficulty.getMaxConcurrentDecoys();
+    if (maxDecoys <= 0 || this.countSleepingDecoys() >= maxDecoys) return;
+
+    this.spawnDecoy();
+  }
+
+  pickMallardSpawn(): MallardSpawnPick {
     const mallardR = Math.random();
     let acc = 0;
     for (const profile of DUCK_SPAWN_PROFILES) {
       acc += profile.weight;
       if (mallardR < acc) {
-        return { entity: 'duck', sex: profile.sex, kind: profile.kind };
+        return { sex: profile.sex, kind: profile.kind };
       }
     }
 
     const last = DUCK_SPAWN_PROFILES[DUCK_SPAWN_PROFILES.length - 1];
-    return { entity: 'duck', sex: last.sex, kind: last.kind };
+    return { sex: last.sex, kind: last.kind };
   }
 
   /** Bias toward screen-left; crest drift pushes ducks right as they rise. */
@@ -171,29 +214,37 @@ export class SpawnController {
     return null;
   }
 
-  private spawnEntity(): void {
+  private spawnMallard(): void {
+    const pick = this.pickMallardSpawn();
     const spawnX = this.pickSpawnX();
     if (spawnX === null) return;
-
-    const pick = this.pickSpawn();
-    if (pick.entity === 'decoy') {
-      const duck = createDuck(
-        this.scene,
-        'male',
-        'decoy',
-        this.layout,
-        this.waterfallStage,
-        spawnX,
-      );
-      this.ducks.add(duck);
-      this.scene.events.emit('duck-spawned', duck);
-      return;
-    }
 
     const duck = createDuck(
       this.scene,
       pick.sex,
       pick.kind,
+      this.layout,
+      this.waterfallStage,
+      spawnX,
+    );
+    this.ducks.add(duck);
+    this.scene.events.emit('duck-spawned', duck);
+  }
+
+  private spawnDecoy(): void {
+    let spawnX = this.pickSpawnX();
+    if (spawnX === null) {
+      for (let i = 0; i < 4; i++) {
+        spawnX = this.pickSpawnX();
+        if (spawnX !== null) break;
+      }
+    }
+    if (spawnX === null) return;
+
+    const duck = createDuck(
+      this.scene,
+      'male',
+      'decoy',
       this.layout,
       this.waterfallStage,
       spawnX,

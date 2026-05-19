@@ -53,4 +53,17 @@ const unlockAudioOnGesture = (): void => {
 document.addEventListener('pointerdown', unlockAudioOnGesture, { once: true, passive: true });
 document.addEventListener('keydown', unlockAudioOnGesture, { once: true });
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    const music = MusicManager.getInstance();
+    if (document.hidden) {
+      game.loop.sleep();
+      music.pauseForInterruption();
+    } else {
+      game.loop.wake();
+      music.resumeFromInterruption();
+    }
+  });
+}
