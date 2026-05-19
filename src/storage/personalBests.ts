@@ -10,8 +10,6 @@ export interface PersonalBests {
   mostDucksSaved: number;
   longestCombo: number;
   longestTimeMs: number;
-  /** Lowest misses in a single run; null until first completed run. */
-  fewestDucksMissed: number | null;
 }
 
 export type PersonalStatKey = keyof PersonalBests;
@@ -48,13 +46,6 @@ export const PERSONAL_STAT_CARDS: PersonalStatDisplay[] = [
     fill: 0x8a6a2a,
     format: (b) => (b.longestCombo > 0 ? String(b.longestCombo) : '—'),
   },
-  {
-    key: 'fewestDucksMissed',
-    label: 'Fewest splashes',
-    fill: 0x3a5f8a,
-    format: (b) =>
-      b.fewestDucksMissed === null ? '—' : String(b.fewestDucksMissed),
-  },
 ];
 
 export function createEmptyPersonalBests(): PersonalBests {
@@ -63,7 +54,6 @@ export function createEmptyPersonalBests(): PersonalBests {
     mostDucksSaved: 0,
     longestCombo: 0,
     longestTimeMs: 0,
-    fewestDucksMissed: null,
   };
 }
 
@@ -116,12 +106,6 @@ export function recordPersonalRun(
     bests.longestTimeMs = stats.timeSurvivedMs;
     isNewLongestTime = true;
   }
-  if (
-    bests.fewestDucksMissed === null ||
-    stats.ducksMissed < bests.fewestDucksMissed
-  ) {
-    bests.fewestDucksMissed = stats.ducksMissed;
-  }
 
   saveBests(bests);
 
@@ -171,7 +155,6 @@ function migrateLegacyData(): PersonalBests {
           const e = row as Record<string, unknown>;
           const score = typeof e.score === 'number' ? e.score : 0;
           const ducksSaved = typeof e.ducksSaved === 'number' ? e.ducksSaved : 0;
-          const ducksMissed = typeof e.ducksMissed === 'number' ? e.ducksMissed : 0;
           const longestCombo =
             typeof e.longestCombo === 'number' ? e.longestCombo : 0;
           const timeSurvivedMs =
@@ -181,12 +164,6 @@ function migrateLegacyData(): PersonalBests {
           if (ducksSaved > bests.mostDucksSaved) bests.mostDucksSaved = ducksSaved;
           if (longestCombo > bests.longestCombo) bests.longestCombo = longestCombo;
           if (timeSurvivedMs > bests.longestTimeMs) bests.longestTimeMs = timeSurvivedMs;
-          if (
-            bests.fewestDucksMissed === null ||
-            ducksMissed < bests.fewestDucksMissed
-          ) {
-            bests.fewestDucksMissed = ducksMissed;
-          }
         }
       }
     }
@@ -224,7 +201,6 @@ function isValidBests(value: unknown): value is PersonalBests {
     typeof b.bestScore === 'number' &&
     typeof b.mostDucksSaved === 'number' &&
     typeof b.longestCombo === 'number' &&
-    typeof b.longestTimeMs === 'number' &&
-    (b.fewestDucksMissed === null || typeof b.fewestDucksMissed === 'number')
+    typeof b.longestTimeMs === 'number'
   );
 }
