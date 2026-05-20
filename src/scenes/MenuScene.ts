@@ -11,9 +11,10 @@ import { MasterMuteButton, getMenuMasterMutePosition } from '../ui/MasterMuteBut
 import {
   addVerticalVignettes,
   createTextLink,
+  ensureLilitaFont,
   labelTextStyle,
+  lilitaDisplayStyle,
   scoreTextStyle,
-  titleTextStyle,
 } from '../ui/uiChrome';
 import { GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
 import { formatSurvivalTime } from '../models/RunStats';
@@ -117,31 +118,11 @@ export class MenuScene extends Phaser.Scene {
 
     const taglineY = logoY + this.titleLogo.displayHeight + 20;
     const tagline = this.add
-      .text(
-        cx,
-        taglineY,
-        'Save the Falling Ducks!',
-        titleTextStyle({
-          fontFamily: '"Lilita One", "Fredoka One", "Luckiest Guy", "Comic Sans MS", cursive',
-          fontStyle: 'normal',
-          fontSize: '26px',
-          color: '#ffffff',
-          stroke: '#1a0e08',
-          strokeThickness: 6,
-          shadow: {
-            offsetX: 0,
-            offsetY: 3,
-            color: '#000000',
-            blur: 4,
-            stroke: false,
-            fill: true,
-          },
-        }),
-      )
+      .text(cx, taglineY, 'Save the Falling Ducks!', lilitaDisplayStyle())
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);
-    void this.ensureTaglineFont(tagline);
+    void ensureLilitaFont(tagline, 26);
 
     const high = getHighScore();
     const longestMs = getLongestTimeMs();
@@ -199,20 +180,6 @@ export class MenuScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);
-  }
-
-  private async ensureTaglineFont(tagline: Phaser.GameObjects.Text): Promise<void> {
-    const fontset = (document as Document & { fonts?: FontFaceSet }).fonts;
-    if (!fontset || typeof fontset.load !== 'function') return;
-    try {
-      await fontset.load('26px "Lilita One"');
-    } catch {
-      /* Font failed — fallback stack stays. */
-    }
-    if (!tagline.active) return;
-    const original = tagline.text;
-    tagline.setText(' ');
-    tagline.setText(original);
   }
 
   private createPlayButton(): void {

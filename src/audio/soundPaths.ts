@@ -13,6 +13,22 @@ export const WAKE_QUACK_URLS: readonly string[] = WAKE_QUACK_FILES.map(
 /** Golden duck wake SFX. */
 export const GOLDEN_WAKE_URL = SOUNDFX_BASE + encodeURIComponent('golden.mp3');
 
+/** Combo meter start / milestone fanfare. */
+export const COMBO_URL = SOUNDFX_BASE + encodeURIComponent('combo.mp3');
+
+/** Moonflower collected. */
+export const MOONFLOWER_URL = SOUNDFX_BASE + encodeURIComponent('moonflower.mp3');
+
+/** Extra heart from balloon or golden egg. */
+export const LIFE_URL = SOUNDFX_BASE + encodeURIComponent('life.mp3');
+
+/** Golden egg cracks open before awarding +1 life. */
+export const CRACKING_EGG_URL = SOUNDFX_BASE + encodeURIComponent('egg-cracking.mp3');
+
+/** Level passed stinger + crowd cheer. */
+export const LEVEL_PASS_URL = SOUNDFX_BASE + encodeURIComponent('pass.mp3');
+export const CHEERING_URL = SOUNDFX_BASE + encodeURIComponent('cheering.mp3');
+
 /**
  * Looping ambient beds that play during gameplay. `peak` is the maximum
  * fraction of the file's original volume when the SFX slider is at 100%.

@@ -8,6 +8,7 @@ import { SoundManager } from '../audio/SoundManager';
 import { SettingsButton, getDefaultSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
 import { MasterMuteButton, getGameMasterMutePosition } from '../ui/MasterMuteButton';
+import { LevelPassedBanner } from '../ui/LevelPassedBanner';
 import { MOONFLOWER_ATLAS_KEYS } from '../config/moonflowerAssets';
 import {
   BALLOON,
@@ -15,8 +16,8 @@ import {
   COMBO,
   getComboMilestoneTier,
   DUCK,
-  getMoonflowerHintAtSec,
   GOLDEN_EGG,
+  HUD_RUN_CLOCK,
   MAX_LIVES,
   MAX_LIVES_CAP,
   SCENE_KEYS,
@@ -68,6 +69,8 @@ import { DifficultyManager } from '../systems/DifficultyManager';
 import { MoonflowerController } from '../systems/MoonflowerController';
 import { SpawnController } from '../systems/SpawnController';
 
+const REOPEN_SETTINGS_AFTER_RULES = 'reopen-settings-after-rules';
+
 export class GameScene extends Phaser.Scene {
   private hud!: HUD;
   private difficulty!: DifficultyManager;
@@ -79,6 +82,7 @@ export class GameScene extends Phaser.Scene {
   private masterMuteButton!: MasterMuteButton;
   private settingsPaused = false;
   private leavingViaSettings = false;
+  private viewingRulesFromSettings = false;
   private stage!: WaterfallStage;
   private moonflowerController!: MoonflowerController;
   private ducks!: Phaser.GameObjects.Group;
@@ -105,6 +109,8 @@ export class GameScene extends Phaser.Scene {
   private goldenEggRewardTimer: Phaser.Time.TimerEvent | null = null;
   /** Prevents one golden duck from crediting the egg twice (e.g. duplicate save events). */
   private goldenEggCreditedDucks = new WeakSet<Duck>();
+  private levelPassedThisRun = false;
+  private levelPassedBanner: LevelPassedBanner | null = null;
 
   constructor() {
     super(SCENE_KEYS.game);
@@ -140,6 +146,7 @@ export class GameScene extends Phaser.Scene {
     this.cancelGoldenEggRewardTimer();
     this.goldenEggCreditedDucks = new WeakSet<Duck>();
     this.moonflowerHintShown = false;
+    this.levelPassedThisRun = false;
     this.combo = 0;
     this.comboDrainProgress = 0;
     this.stats = createRunStats();
@@ -166,9 +173,11 @@ export class GameScene extends Phaser.Scene {
       mode: 'gameplay',
       onOpen: () => this.applySettingsPause(),
       onClose: () => {
+        if (this.viewingRulesFromSettings) return;
         if (!this.leavingViaSettings) this.applySettingsResume();
       },
       onQuitToMenu: () => this.quitToMenu(),
+      onOpenRules: () => this.openRulesFromSettings(),
     });
     this.settingsButton = new SettingsButton(this, {
       drawer: this.settingsDrawer,
@@ -220,6 +229,10 @@ export class GameScene extends Phaser.Scene {
     this.events.on(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
     this.events.on(GameEvents.EARLY_TAP, this.onEarlyTap, this);
     this.events.on(GameEvents.CHARM_COLLECTED, this.onCharmCollected, this);
+    this.events.on(REOPEN_SETTINGS_AFTER_RULES, this.reopenSettingsAfterRules, this);
+
+    this.levelPassedBanner?.destroy();
+    this.levelPassedBanner = new LevelPassedBanner(this);
 
     this.scheduleHeartBalloons();
 
@@ -289,6 +302,23 @@ export class GameScene extends Phaser.Scene {
       this.moonflowerController?.setEnabled(true);
       this.spawner.start();
     }
+  }
+
+  private openRulesFromSettings(): void {
+    this.viewingRulesFromSettings = true;
+    this.settingsDrawer.close();
+    this.time.delayedCall(260, () => {
+      if (!this.scene.isActive()) return;
+      this.scene.launch(SCENE_KEYS.rules, { returnToGame: true });
+    });
+  }
+
+  private reopenSettingsAfterRules(): void {
+    this.viewingRulesFromSettings = false;
+    if (!this.settingsPaused && !this.isGameOver && !this.calibrationMode) {
+      this.applySettingsPause();
+    }
+    this.settingsDrawer.open();
   }
 
   private quitToMenu(): void {
@@ -389,7 +419,6 @@ export class GameScene extends Phaser.Scene {
     if (this.isGameplayUiTap(worldX, worldY)) return false;
 
     if (this.moonflowerController?.tryTap(worldX, worldY)) {
-      this.soundManager.play('bonus');
       return true;
     }
 
@@ -483,7 +512,7 @@ export class GameScene extends Phaser.Scene {
 
     this.lives = Math.min(MAX_LIVES_CAP, this.lives + 1);
     this.hud.setLives(this.lives);
-    this.soundManager.play('bonus');
+    this.soundManager.playLifeGain();
     if (showFloat) {
       this.showFloatingText(x, y - 20, '+1 ♥', floatingColor);
     }
@@ -615,29 +644,50 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    this.tryMoonflowerSunsetHint();
+    this.tryHudRunClockEvents();
+  }
+
+  /** Moonflower hint, sprout, and level pass — keyed to the HUD MM:SS timer. */
+  private tryHudRunClockEvents(): void {
+    const hudSec = this.stats.timeSurvivedMs / 1000;
+
+    if (
+      !this.moonflowerHintShown &&
+      !this.calibrationMode &&
+      !this.moonflowerController.isCollectedThisRun() &&
+      hudSec >= HUD_RUN_CLOCK.moonflowerHintSec
+    ) {
+      this.moonflowerHintShown = true;
+      this.bottomToast.show({
+        text: 'Collect the moonflower after sunset',
+        imageKey: MOONFLOWER_ATLAS_KEYS.sway,
+        imageFrame: 'frame_000',
+      });
+    }
+
+    if (hudSec >= HUD_RUN_CLOCK.moonflowerSproutSec) {
+      this.moonflowerController.spawnForRun();
+    }
+
+    if (hudSec >= HUD_RUN_CLOCK.levelPassSec) {
+      this.triggerLevelPassed();
+    }
+  }
+
+  private triggerLevelPassed(): void {
+    if (this.levelPassedThisRun || this.isGameOver) return;
+    this.levelPassedThisRun = true;
+    this.soundManager.playLevelPassedCelebration();
+    this.levelPassedBanner?.show();
   }
 
   private onCharmCollected(payload: { id: string; x?: number; y?: number }): void {
     if (payload.id === 'moonflower' && payload.x != null && payload.y != null) {
+      this.soundManager.playMoonflowerCollect();
       this.hud.playMoonflowerCollectFly(payload.x, payload.y);
       return;
     }
     this.hud.setMoonflowerCollectedThisRun(true, false);
-  }
-
-  /** Fourteen seconds before sunset — remind players about the night charm. */
-  private tryMoonflowerSunsetHint(): void {
-    if (this.moonflowerHintShown || this.calibrationMode) return;
-    if (this.moonflowerController.isCollectedThisRun()) return;
-    if (this.difficulty.elapsedSeconds < getMoonflowerHintAtSec()) return;
-
-    this.moonflowerHintShown = true;
-    this.bottomToast.show({
-      text: 'Collect the moonflower after sunset',
-      imageKey: MOONFLOWER_ATLAS_KEYS.sway,
-      imageFrame: 'frame_000',
-    });
   }
 
   private onDuckSpawned(_duck: Duck): void {
@@ -735,6 +785,7 @@ export class GameScene extends Phaser.Scene {
         GOLDEN_EGG.fullDisplayMs,
         () => {
           this.goldenEggRewardTimer = null;
+          this.soundManager.playGoldenEggCrack();
           this.grantBonusLife(x, y, '#ffd700', false);
           this.hud.setGoldenEggState('empty');
           this.bottomToast.show({ text: 'Golden Egg! + 1 ♥' });
@@ -784,11 +835,22 @@ export class GameScene extends Phaser.Scene {
     this.soundManager.stopGameplayBackground();
     this.soundManager.play('gameOver');
 
+    const moonflowerCollected = this.moonflowerController?.isCollectedThisRun() ?? false;
+    const levelPassed = this.levelPassedThisRun;
+    const outcome: GameOverData['outcome'] = levelPassed
+      ? moonflowerCollected
+        ? 'passedWithMoonflower'
+        : 'passed'
+      : 'failed';
+
     const data: GameOverData = {
       score: this.score,
       stats: { ...this.stats },
       isNewHighScore: false,
       isNewLongestTime: false,
+      levelPassed,
+      moonflowerCollected,
+      outcome,
     };
 
     this.time.delayedCall(600, () => {
@@ -857,6 +919,9 @@ export class GameScene extends Phaser.Scene {
     this.events.off(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
     this.events.off(GameEvents.EARLY_TAP, this.onEarlyTap, this);
     this.events.off(GameEvents.CHARM_COLLECTED, this.onCharmCollected, this);
+    this.events.off(REOPEN_SETTINGS_AFTER_RULES, this.reopenSettingsAfterRules, this);
+    this.levelPassedBanner?.destroy();
+    this.levelPassedBanner = null;
     this.cancelGoldenEggRewardTimer();
     this.bottomToast?.destroy();
     for (const balloon of this.activeBalloons) {

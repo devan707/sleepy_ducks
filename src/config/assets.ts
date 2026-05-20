@@ -25,8 +25,12 @@ export const ASSET_KEYS = {
   homeWaterfall: 'ui-home-waterfall',
   titleLogo: 'ui-title-logo',
   gameOverBanner: 'ui-game-over',
+  uiTooSleepy: 'ui-too-sleepy',
+  uiLevelPassed: 'ui-level-passed',
+  uiLevelPassedMoonflower: 'ui-level-passed-moonflower',
   uiPlay: 'ui-play',
   uiRetry: 'ui-retry',
+  uiNextLevel: 'ui-next-level',
   uiGear: 'ui-gear',
   uiSoundOn: 'ui-sound-on',
   uiSoundOff: 'ui-sound-off',
@@ -35,6 +39,7 @@ export const ASSET_KEYS = {
   atlasMoonflowerSprout: 'atlas-moonflower-sprout',
   atlasMoonflowerBloom: 'atlas-moonflower-bloom',
   atlasMoonflowerSway: 'atlas-moonflower-sway',
+  atlasZzz: 'atlas-zzz',
 } as const;
 
 export type AssetKey = (typeof ASSET_KEYS)[keyof typeof ASSET_KEYS];
@@ -85,6 +90,21 @@ export const MENU_MANIFEST: AssetManifestEntry[] = [
     type: 'image',
   },
   {
+    key: ASSET_KEYS.uiTooSleepy,
+    path: `${ASSET_ROOT}/ui/too_sleepy.png`,
+    type: 'image',
+  },
+  {
+    key: ASSET_KEYS.uiLevelPassed,
+    path: `${ASSET_ROOT}/ui/level_passed.png`,
+    type: 'image',
+  },
+  {
+    key: ASSET_KEYS.uiLevelPassedMoonflower,
+    path: `${ASSET_ROOT}/ui/level_pass_moonflower.png`,
+    type: 'image',
+  },
+  {
     key: ASSET_KEYS.decoy,
     path: `${ASSET_ROOT}/sprites/decoy.png`,
     type: 'image',
@@ -118,6 +138,17 @@ export const MENU_MANIFEST: AssetManifestEntry[] = [
     key: ASSET_KEYS.uiRetry,
     path: `${ASSET_ROOT}/ui/retry.png`,
     type: 'image',
+  },
+  {
+    key: ASSET_KEYS.uiNextLevel,
+    path: `${ASSET_ROOT}/ui/next_level.png`,
+    type: 'image',
+  },
+  {
+    key: ASSET_KEYS.atlasZzz,
+    path: `${ASSET_ROOT}/sprites/zzz.png`,
+    atlasPath: `${ASSET_ROOT}/sprites/zzz.json`,
+    type: 'atlas',
   },
 ];
 

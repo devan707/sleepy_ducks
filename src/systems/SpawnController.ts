@@ -65,17 +65,20 @@ export class SpawnController {
     this.cancelGoldenReward();
   }
 
-  /** Schedule a golden skyfall 1–10s after the player loses a life (while still alive). */
+  /** Schedule a golden skyfall 1–5s after the player loses a life (while still alive). */
   scheduleGoldenAfterLifeLoss(): void {
     this.cancelGoldenReward();
-    if (this.hasActiveGolden()) return;
-
     const delay = Phaser.Math.Between(
       GOLDEN_REWARD.minDelayMs,
       GOLDEN_REWARD.maxDelayMs,
     );
+    this.scheduleGoldenIn(delay);
+  }
+
+  private scheduleGoldenIn(delayMs: number): void {
+    this.cancelGoldenReward();
     this.goldenTimer = this.scene.time.addEvent({
-      delay,
+      delay: delayMs,
       callback: () => {
         this.goldenTimer = null;
         this.trySpawnGoldenReward();
@@ -98,11 +101,12 @@ export class SpawnController {
   }
 
   private trySpawnGoldenReward(): void {
-    if (this.hasActiveGolden()) return;
+    if (this.hasActiveGolden()) {
+      this.scheduleGoldenIn(GOLDEN_REWARD.retryDelayMs);
+      return;
+    }
 
-    const spawnX = this.pickSpawnX();
-    if (spawnX === null) return;
-
+    const spawnX = this.pickGoldenSpawnX();
     const sex: DuckSex = Math.random() < 0.5 ? 'male' : 'female';
     const duck = createDuck(
       this.scene,
@@ -114,6 +118,11 @@ export class SpawnController {
     );
     this.ducks.add(duck);
     this.scene.events.emit('duck-spawned', duck);
+  }
+
+  /** Skyfall — any lane X is fine (duck dives from above, not crest-spawned). */
+  private pickGoldenSpawnX(): number {
+    return this.randomLaneX();
   }
 
   private scheduleNextMallard(): void {

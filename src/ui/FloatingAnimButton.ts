@@ -8,6 +8,8 @@ export type FloatingAnimButtonOpts = {
   onClick?: () => void;
   /** If false, call playEntrance() to fade in and start the bob. */
   autoFloat?: boolean;
+  /** Delay before the bob loop starts — staggers motion vs other buttons. */
+  floatPhaseMs?: number;
 };
 
 const FLOAT_Y = 6;
@@ -18,6 +20,7 @@ export class FloatingAnimButton {
   readonly root: Phaser.GameObjects.Container;
   private readonly sprite: Phaser.GameObjects.Sprite;
   private readonly baseY: number;
+  private readonly floatPhaseMs: number;
   private floatTween: Phaser.Tweens.Tween | null = null;
 
   constructor(
@@ -29,6 +32,7 @@ export class FloatingAnimButton {
     opts: FloatingAnimButtonOpts,
   ) {
     this.baseY = y;
+    this.floatPhaseMs = opts.floatPhaseMs ?? 0;
 
     this.sprite = scene.add.sprite(0, 0, textureKey);
     this.sprite.setOrigin(0.5);
@@ -110,6 +114,7 @@ export class FloatingAnimButton {
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
+      delay: this.floatPhaseMs,
     });
   }
 

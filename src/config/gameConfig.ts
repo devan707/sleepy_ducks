@@ -126,10 +126,12 @@ export const DECOY_SPAWN = {
   postRampIntervalSec: 60,
 } as const;
 
-/** Golden skyfall within 6s after a duck is missed (life lost, still alive). */
+/** Golden skyfall 1–5s after a duck is missed (life lost, still alive). */
 export const GOLDEN_REWARD = {
-  minDelayMs: 800,
-  maxDelayMs: 6_000,
+  minDelayMs: 1_000,
+  maxDelayMs: 5_000,
+  /** If a golden is still on screen when the timer fires, retry this often. */
+  retryDelayMs: 400,
 } as const;
 
 export const MAX_LIVES = 3;
@@ -159,6 +161,10 @@ export const COMBO = {
   milestones: [5, 10, 20, 30, 50, 75, 100] as const,
   /** Score multiplier unlocked at each milestone (same index as `milestones`). */
   milestoneMultipliers: [1.5, 1.8, 2.2, 2.6, 3.2, 3.6, 4.0] as const,
+  /** Overlapping combo.mp3 layers at each milestone (same index as `milestones`). */
+  milestoneRewardLayers: [2, 3, 4, 4, 5, 5, 5] as const,
+  /** Delay between stacked combo reward sounds (ms). */
+  milestoneRewardStackMs: 300,
 } as const;
 
 export type ComboMilestone = (typeof COMBO.milestones)[number];
@@ -292,6 +298,26 @@ export function getSunsetElapsedSec(): number {
   return DAY_NIGHT.sunSetDurationSec - DAY_NIGHT.sunSetStartOffsetSec;
 }
 
+/**
+ * In-run HUD timer milestones (matches MM:SS on the score panel).
+ * Visual day/night may differ — these drive gameplay beats the player reads off the clock.
+ */
+export const HUD_RUN_CLOCK = {
+  moonflowerHintSec: 55,
+  moonflowerSproutSec: 60,
+  levelPassSec: 65,
+} as const;
+
+/** @deprecated Use HUD_RUN_CLOCK.moonflowerHintSec */
+export const MOONFLOWER_HINT = {
+  secBeforeSunset: 14,
+} as const;
+
+/** @deprecated Use HUD_RUN_CLOCK.moonflowerHintSec */
+export function getMoonflowerHintAtSec(): number {
+  return HUD_RUN_CLOCK.moonflowerHintSec;
+}
+
 /** Bottom-screen toast panels (moonflower hint, rewards, etc.). */
 export const GAMEPLAY_TOAST = {
   panelAlpha: 0.84,
@@ -312,14 +338,6 @@ export const GAMEPLAY_TOAST = {
 /** Y center for bottom toasts — layered over the combo panel. */
 export function getGameplayToastY(): number {
   return COMBO_UI.y - GAMEPLAY_TOAST.yOffsetAboveCombo;
-}
-
-export const MOONFLOWER_HINT = {
-  secBeforeSunset: 14,
-} as const;
-
-export function getMoonflowerHintAtSec(): number {
-  return getSunsetElapsedSec() - MOONFLOWER_HINT.secBeforeSunset;
 }
 
 export const DIFFICULTY = {

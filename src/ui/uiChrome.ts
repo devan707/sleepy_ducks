@@ -8,6 +8,55 @@ const FONT =
 const SETTINGS_HEAVY_FONT =
   '"Arial Black", "Arial Bold", "Helvetica Neue", system-ui, sans-serif';
 
+/** Cartoon display face (Google Font + fallbacks) used for menu tagline + level banners. */
+export const LILITA_FONT =
+  '"Lilita One", "Fredoka One", "Luckiest Guy", "Comic Sans MS", cursive';
+
+/**
+ * Phaser bakes text into a canvas as soon as it's added. If a web font is still
+ * loading when that happens, the fallback face gets baked in. Repaint after the
+ * font arrives so the styled face replaces the fallback in place.
+ */
+export async function ensureLilitaFont(
+  text: Phaser.GameObjects.Text,
+  fontSizePx = 26,
+): Promise<void> {
+  const fontset = (document as Document & { fonts?: FontFaceSet }).fonts;
+  if (!fontset || typeof fontset.load !== 'function') return;
+  try {
+    await fontset.load(`${fontSizePx}px "Lilita One"`);
+  } catch {
+    /* Font failed — fallback stack stays. */
+  }
+  if (!text.active) return;
+  const original = text.text;
+  text.setText(' ');
+  text.setText(original);
+}
+
+/** Shared bold cartoon style: matches menu "Save the Falling Ducks!" tagline. */
+export function lilitaDisplayStyle(
+  overrides?: Phaser.Types.GameObjects.Text.TextStyle,
+): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    fontFamily: LILITA_FONT,
+    fontStyle: 'normal',
+    fontSize: '26px',
+    color: '#ffffff',
+    stroke: '#1a0e08',
+    strokeThickness: 6,
+    shadow: {
+      offsetX: 0,
+      offsetY: 3,
+      color: '#000000',
+      blur: 4,
+      stroke: false,
+      fill: true,
+    },
+    ...overrides,
+  };
+}
+
 export const UI_CHROME = {
   accentGold: '#ffe566',
   textPrimary: '#ffffff',

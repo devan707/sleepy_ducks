@@ -1,10 +1,15 @@
 import Phaser from 'phaser';
 import {
+  CHEERING_URL,
+  COMBO_URL,
+  CRACKING_EGG_URL,
   GAMEPLAY_BACKGROUND_LOOPS,
   GOLDEN_WAKE_URL,
+  LEVEL_PASS_URL,
+  LIFE_URL,
+  MOONFLOWER_URL,
   WAKE_QUACK_URLS,
 } from './soundPaths';
-import { COMBO } from '../config/gameConfig';
 import {
   getSfxVolume,
   isSfxEnabled,
@@ -12,6 +17,7 @@ import {
   setSfxVolume as persistSfxVolume,
 } from '../storage/audioSettings';
 import { isMasterMuted, subscribeMasterMute } from '../storage/masterMute';
+import { COMBO } from '../config/gameConfig';
 
 export type SoundId =
   | 'wake'
@@ -30,6 +36,14 @@ let instance: SoundManager | null = null;
 /** Peak volume for mallard wake quacks (HTMLAudioElement 0–1). */
 const WAKE_QUACK_PEAK_VOLUME = 0.62;
 const GOLDEN_WAKE_PEAK_VOLUME = 0.7;
+const COMBO_PEAK_VOLUME = 0.76;
+const MOONFLOWER_PEAK_VOLUME = 0.78;
+const LIFE_PEAK_VOLUME = 0.76;
+const CRACKING_EGG_PEAK_VOLUME = 0.78;
+const LEVEL_PASS_PEAK_VOLUME = 0.78;
+const CHEERING_PEAK_VOLUME = 0.72;
+/** Cheer follows the pass stinger by this much (ms). */
+const LEVEL_PASS_CHEER_DELAY_MS = 420;
 /** ~250 ms full quack, 250 ms fade, hard stop at 500 ms. */
 const WAKE_QUACK_HOLD_MS = 250;
 const WAKE_QUACK_FADE_MS = 250;
@@ -61,6 +75,12 @@ export class SoundManager {
   private ctx: AudioContext | null = null;
   private readonly wakeClips: HTMLAudioElement[];
   private readonly goldenWakeClip: HTMLAudioElement;
+  private readonly comboClip: HTMLAudioElement;
+  private readonly moonflowerClip: HTMLAudioElement;
+  private readonly lifeClip: HTMLAudioElement;
+  private readonly crackingEggClip: HTMLAudioElement;
+  private readonly levelPassClip: HTMLAudioElement;
+  private readonly cheeringClip: HTMLAudioElement;
   private lastWakeIndex = -1;
   private activeWakePlayback: HTMLAudioElement | null = null;
   private activeGoldenPlayback: HTMLAudioElement | null = null;
@@ -87,6 +107,36 @@ export class SoundManager {
     this.goldenWakeClip.loop = false;
     this.goldenWakeClip.muted = muted;
 
+    this.comboClip = new Audio(COMBO_URL);
+    this.comboClip.preload = 'auto';
+    this.comboClip.loop = false;
+    this.comboClip.muted = muted;
+
+    this.moonflowerClip = new Audio(MOONFLOWER_URL);
+    this.moonflowerClip.preload = 'auto';
+    this.moonflowerClip.loop = false;
+    this.moonflowerClip.muted = muted;
+
+    this.lifeClip = new Audio(LIFE_URL);
+    this.lifeClip.preload = 'auto';
+    this.lifeClip.loop = false;
+    this.lifeClip.muted = muted;
+
+    this.crackingEggClip = new Audio(CRACKING_EGG_URL);
+    this.crackingEggClip.preload = 'auto';
+    this.crackingEggClip.loop = false;
+    this.crackingEggClip.muted = muted;
+
+    this.levelPassClip = new Audio(LEVEL_PASS_URL);
+    this.levelPassClip.preload = 'auto';
+    this.levelPassClip.loop = false;
+    this.levelPassClip.muted = muted;
+
+    this.cheeringClip = new Audio(CHEERING_URL);
+    this.cheeringClip.preload = 'auto';
+    this.cheeringClip.loop = false;
+    this.cheeringClip.muted = muted;
+
     for (const { url, peak } of GAMEPLAY_BACKGROUND_LOOPS) {
       const clip = new Audio(url);
       clip.preload = 'auto';
@@ -103,6 +153,12 @@ export class SoundManager {
   private applyMasterMute(muted: boolean): void {
     for (const clip of this.wakeClips) clip.muted = muted;
     this.goldenWakeClip.muted = muted;
+    this.comboClip.muted = muted;
+    this.moonflowerClip.muted = muted;
+    this.lifeClip.muted = muted;
+    this.crackingEggClip.muted = muted;
+    this.levelPassClip.muted = muted;
+    this.cheeringClip.muted = muted;
     for (const { clip } of this.backgroundTracks) clip.muted = muted;
     if (this.activeWakePlayback) this.activeWakePlayback.muted = muted;
     if (this.activeGoldenPlayback) this.activeGoldenPlayback.muted = muted;
@@ -199,6 +255,18 @@ export class SoundManager {
     }
     if (this.goldenWakeClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       this.goldenWakeClip.load();
+    }
+    if (this.comboClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.comboClip.load();
+    }
+    if (this.moonflowerClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.moonflowerClip.load();
+    }
+    if (this.lifeClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.lifeClip.load();
+    }
+    if (this.crackingEggClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.crackingEggClip.load();
     }
   }
 
@@ -319,121 +387,61 @@ export class SoundManager {
     });
   }
 
-  /** Bright chime when the combo meter appears. */
-  private playComboStartChime(): void {
-    this.playScheduledChime(
-      [
-        { freq: 523, delay: 0, dur: 0.16 },
-        { freq: 659, delay: 0.09, dur: 0.16 },
-        { freq: 784, delay: 0.18, dur: 0.18 },
-        { freq: 1047, delay: 0.3, dur: 0.22 },
-        { freq: 1319, delay: 0.44, dur: 0.24, gainMult: 0.85 },
-      ],
-      0.2,
-    );
-  }
+  /** Combo meter start or milestone — stacked combo.mp3 layers at milestones. */
+  playComboReward(kind: 'start' | 'milestone', milestoneTier = 0): void {
+    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (isMasterMuted()) return;
+    this.tryUnlock();
+    const tierBoost = kind === 'milestone' ? Math.min(milestoneTier, 6) * 0.04 : 0;
+    const volume = COMBO_PEAK_VOLUME + tierBoost;
 
-  /** Escalating fanfare at combo milestones (5 … 100). */
-  private playComboMilestoneChime(tier: number): void {
-    const baseNotes = [784, 880, 988, 1047, 1175, 1319, 1568, 1760];
-    const noteCount = 3 + tier;
-    const notes: Array<{ freq: number; delay: number; dur: number; gainMult?: number }> = [];
-
-    for (let i = 0; i < noteCount; i++) {
-      notes.push({
-        freq: baseNotes[i % baseNotes.length] * (i >= baseNotes.length ? 1.25 : 1),
-        delay: i * 0.075,
-        dur: 0.12 + tier * 0.025,
-      });
-    }
-
-    const chordAt = noteCount * 0.075;
-    if (tier >= 1) {
-      notes.push({ freq: 988, delay: chordAt, dur: 0.22 + tier * 0.04, gainMult: 0.9 });
-      notes.push({ freq: 1175, delay: chordAt, dur: 0.22 + tier * 0.04, gainMult: 0.9 });
-    }
-    if (tier >= 2) {
-      notes.push({ freq: 1319, delay: chordAt, dur: 0.22 + tier * 0.04, gainMult: 0.85 });
-    }
-    if (tier >= 3) {
-      notes.push({ freq: 1568, delay: chordAt + 0.14, dur: 0.32, gainMult: 0.95 });
-    }
-    if (tier >= 4) {
-      notes.push({ freq: 1760, delay: chordAt + 0.14, dur: 0.36, gainMult: 1 });
-      notes.push({ freq: 2093, delay: chordAt + 0.28, dur: 0.42, gainMult: 0.9 });
-    }
-    if (tier >= 5) {
-      notes.push({ freq: 2349, delay: chordAt + 0.32, dur: 0.44, gainMult: 0.95 });
-    }
-    if (tier >= 6) {
-      notes.push({ freq: 2637, delay: chordAt + 0.4, dur: 0.48, gainMult: 1 });
-    }
-
-    this.playScheduledChime(notes, 0.15 + tier * 0.028);
-  }
-
-  private playScheduledChime(
-    notes: ReadonlyArray<{ freq: number; delay: number; dur: number; gainMult?: number }>,
-    masterGain: number,
-  ): void {
-    const ctx = this.resumeContext();
-    if (!ctx) return;
-
-    const run = () => {
-      const t0 = ctx.currentTime;
-      const peak = this.scaledGain(masterGain);
-      for (const note of notes) {
-        this.scheduleChimeTone(
-          ctx,
-          t0 + note.delay,
-          note.freq,
-          note.dur,
-          peak * (note.gainMult ?? 1),
-        );
-      }
-    };
-
-    if (ctx.state === 'running') {
-      run();
+    if (kind === 'start') {
+      this.playGenericOneShot(this.comboClip, volume);
       return;
     }
-    void ctx.resume().then(() => {
-      if (ctx.state === 'running') run();
-    });
-  }
 
-  private scheduleChimeTone(
-    ctx: AudioContext,
-    start: number,
-    freq: number,
-    dur: number,
-    peak: number,
-  ): void {
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, start);
-    g.gain.setValueAtTime(0.0001, start);
-    g.gain.linearRampToValueAtTime(peak, start + 0.014);
-    g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-    osc.connect(g);
-    g.connect(ctx.destination);
-    osc.start(start);
-    osc.stop(start + dur + 0.05);
-  }
-
-  /** Combo meter start or milestone fanfare (tier 0 = 5 combo …). */
-  playComboReward(kind: 'start' | 'milestone', milestoneTier = 0): void {
-    if (!this.sfxEnabled) return;
-    this.tryUnlock();
-    if (kind === 'start') {
-      this.playComboStartChime();
-    } else {
-      const maxTier = COMBO.milestones.length - 1;
-      this.playComboMilestoneChime(
-        Phaser.Math.Clamp(Math.floor(milestoneTier), 0, maxTier),
-      );
+    const layers =
+      COMBO.milestoneRewardLayers[
+        Math.min(Math.max(milestoneTier, 0), COMBO.milestoneRewardLayers.length - 1)
+      ];
+    /** Each staggered hit in this burst is 5% louder than the previous one. */
+    const LAYER_BUILD_FACTOR = 1.05;
+    const stackPeakVolume = Math.min(1, volume);
+    const stackStartVolume =
+      layers > 1
+        ? stackPeakVolume / LAYER_BUILD_FACTOR ** (layers - 1)
+        : stackPeakVolume;
+    for (let i = 0; i < layers; i++) {
+      const layerVolume = Math.min(1, stackStartVolume * LAYER_BUILD_FACTOR ** i);
+      window.setTimeout(() => {
+        if (!this.sfxEnabled || this.isPlaybackBlocked() || isMasterMuted()) return;
+        this.playGenericOneShot(this.comboClip, layerVolume);
+      }, i * COMBO.milestoneRewardStackMs);
     }
+  }
+
+  /** Moonflower tapped and collected. */
+  playMoonflowerCollect(): void {
+    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (isMasterMuted()) return;
+    this.tryUnlock();
+    this.playGenericOneShot(this.moonflowerClip, MOONFLOWER_PEAK_VOLUME);
+  }
+
+  /** Balloon pop or golden egg — player gained a heart. */
+  playLifeGain(): void {
+    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (isMasterMuted()) return;
+    this.tryUnlock();
+    this.playGenericOneShot(this.lifeClip, LIFE_PEAK_VOLUME);
+  }
+
+  /** Full golden egg cracks open (plays before life gain). */
+  playGoldenEggCrack(): void {
+    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (isMasterMuted()) return;
+    this.tryUnlock();
+    this.playGenericOneShot(this.crackingEggClip, CRACKING_EGG_PEAK_VOLUME);
   }
 
   private beep(
@@ -636,7 +644,31 @@ export class SoundManager {
     this.resumeContext();
     this.stopPlayback(this.activeWakePlayback, 'wake');
     this.activeWakePlayback = null;
-    this.playOneShot(this.goldenWakeClip, 'golden', GOLDEN_WAKE_PEAK_VOLUME);
+    this.stopPlayback(this.activeGoldenPlayback, 'golden');
+    this.activeGoldenPlayback = null;
+    this.playGenericOneShot(this.goldenWakeClip, GOLDEN_WAKE_PEAK_VOLUME);
+  }
+
+  /** Nightfall level-pass stinger, then a short crowd cheer. */
+  playLevelPassedCelebration(): void {
+    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (isMasterMuted()) return;
+
+    this.tryUnlock();
+    this.playGenericOneShot(this.levelPassClip, LEVEL_PASS_PEAK_VOLUME);
+    window.setTimeout(() => {
+      if (!this.sfxEnabled || this.isPlaybackBlocked() || isMasterMuted()) return;
+      this.playGenericOneShot(this.cheeringClip, CHEERING_PEAK_VOLUME);
+    }, LEVEL_PASS_CHEER_DELAY_MS);
+  }
+
+  private playGenericOneShot(source: HTMLAudioElement, peakVolume: number): void {
+    const clip = new Audio(source.src);
+    clip.preload = 'auto';
+    clip.loop = false;
+    clip.muted = isMasterMuted();
+    clip.volume = this.scaledClipVolume(peakVolume);
+    void clip.play().catch(() => {});
   }
 
   private playWakeQuack(): void {

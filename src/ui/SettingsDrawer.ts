@@ -46,10 +46,11 @@ const DRAWER_LAYOUT = {
   statCardH: 70,
   statGap: 8,
   emptyStatsH: 84,
-  charmsHeaderY: 490,
+  charmsHeaderY: 476,
   charmsHeaderH: 44,
-  charmsGridY: 571,
-  footerY: 628,
+  charmsGridY: 554,
+  howToPlayFooterY: 610,
+  footerY: 646,
 } as const;
 const SETTINGS_GOLD = 0xffe566;
 /** Settings panel shell — true blue (not pastel sky). */
@@ -72,6 +73,7 @@ export type SettingsDrawerOptions = {
   onOpen?: () => void;
   onClose?: () => void;
   onQuitToMenu?: () => void;
+  onOpenRules?: () => void;
 };
 
 export class SettingsDrawer {
@@ -99,6 +101,7 @@ export class SettingsDrawer {
   private panelMaskGfx: Phaser.GameObjects.Graphics | null = null;
   private panelMask: Phaser.Display.Masks.GeometryMask | null = null;
   private footerLink!: Phaser.GameObjects.Container;
+  private howToPlayLink: Phaser.GameObjects.Container | null = null;
 
   constructor(scene: Phaser.Scene, opts: SettingsDrawerOptions) {
     this.scene = scene;
@@ -380,22 +383,7 @@ export class SettingsDrawer {
       .setOrigin(0.5);
 
     const charmsSection = this.buildCharmsSection();
-    this.footerLink = this.createFooterLink(
-      DRAWER_LAYOUT.footerY,
-      this.opts.mode === 'gameplay' ? 'Back to home →' : 'How to play →',
-      () => {
-        if (this.opts.mode === 'gameplay') {
-          this.opts.onQuitToMenu?.();
-          return;
-        }
-        this.close();
-        this.scene.time.delayedCall(260, () => {
-          this.scene.scene.start(SCENE_KEYS.rules);
-        });
-      },
-    );
-
-    this.panel.add([
+    const footerNodes: Phaser.GameObjects.GameObject[] = [
       panelHit,
       panelBg,
       title,
@@ -408,8 +396,43 @@ export class SettingsDrawer {
       bestsTitleBubble,
       bestsTitle,
       ...charmsSection,
-      this.footerLink,
-    ]);
+    ];
+
+    if (this.opts.mode === 'gameplay') {
+      this.howToPlayLink = this.createFooterLink(
+        DRAWER_LAYOUT.howToPlayFooterY,
+        'How to Play',
+        () => this.opts.onOpenRules?.(),
+        '#ffe566',
+        '#fff8c8',
+        '19px',
+      );
+      this.footerLink = this.createFooterLink(
+        DRAWER_LAYOUT.footerY,
+        'Back to Home →',
+        () => this.opts.onQuitToMenu?.(),
+        '#ffffff',
+        '#e8f4fc',
+      );
+      footerNodes.push(this.howToPlayLink, this.footerLink);
+    } else {
+      this.footerLink = this.createFooterLink(
+        DRAWER_LAYOUT.footerY,
+        'How to Play',
+        () => {
+          this.close();
+          this.scene.time.delayedCall(260, () => {
+            this.scene.scene.start(SCENE_KEYS.rules);
+          });
+        },
+        '#ffe566',
+        '#fff8c8',
+        '19px',
+      );
+      footerNodes.push(this.footerLink);
+    }
+
+    this.panel.add(footerNodes);
 
     this.refreshPersonalBests();
     this.refreshCharmsSection();
@@ -487,12 +510,16 @@ export class SettingsDrawer {
     y: number,
     label: string,
     onSelect: () => void,
+    linkColor = '#ffe566',
+    hoverColor = '#fff8c8',
+    fontSize = '17px',
   ): Phaser.GameObjects.Container {
+    const underlineColor = Number(`0x${linkColor.replace('#', '')}`);
     const text = this.scene.add
       .text(0, 0, label, outlinedTextStyle({
-        fontSize: '17px',
+        fontSize,
         fontStyle: 'bold',
-        color: '#ffe566',
+        color: linkColor,
         strokeThickness: 4,
       }))
       .setOrigin(0.5);
@@ -501,7 +528,7 @@ export class SettingsDrawer {
     const refreshUnderline = () => {
       const w = text.width + 8;
       underline.clear();
-      underline.lineStyle(2, 0xffe566, 0.85);
+      underline.lineStyle(2, underlineColor, 0.85);
       underline.beginPath();
       underline.moveTo(-w / 2, text.height / 2 + 6);
       underline.lineTo(w / 2, text.height / 2 + 6);
@@ -522,11 +549,11 @@ export class SettingsDrawer {
     });
 
     hit.on('pointerover', () => {
-      text.setColor('#fff8c8');
+      text.setColor(hoverColor);
       this.scene.tweens.add({ targets: root, scaleX: 1.04, scaleY: 1.04, duration: 90 });
     });
     hit.on('pointerout', () => {
-      text.setColor('#ffe566');
+      text.setColor(linkColor);
       this.scene.tweens.add({ targets: root, scaleX: 1, scaleY: 1, duration: 90 });
     });
 

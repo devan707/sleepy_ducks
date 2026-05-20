@@ -15,6 +15,8 @@ import { isMasterMuted, subscribeMasterMute } from '../storage/masterMute';
 
 export type MusicTrack = 'menuUi' | 'gameplay' | 'gameplayNight' | 'gameOver';
 
+export type GameOverMusicVariant = 'failed' | 'passed';
+
 /**
  * Per-track caps applied on top of the user's music slider — slider at 100%
  * plays each track at this fraction of its source file's volume.
@@ -35,8 +37,11 @@ export class MusicManager {
   private gameplayNightCrossfaded = false;
   private gameplayMusicTimelineActive = false;
   private nightTrackStarted = false;
+  private gameOverMusicVariant: GameOverMusicVariant = 'failed';
   /** Settings drawer, tab hidden, etc. — resume only when this returns to 0. */
   private playbackInterruptionCount = 0;
+  /** Last elapsed time passed from GameScene — used to catch up crossfade after tab/settings pause. */
+  private lastGameplayElapsedSec = 0;
 
   private constructor() {
     this.clips = {
@@ -105,6 +110,15 @@ export class MusicManager {
     this.playbackInterruptionCount -= 1;
     if (this.playbackInterruptionCount === 0 && !this.isPlaybackBlocked()) {
       this.tryResumeActiveTrack();
+      if (
+        this.lastGameplayElapsedSec > 0 &&
+        (this.activeTrack === 'gameplay' ||
+          this.activeTrack === 'gameplayNight' ||
+          this.gameplayMusicTimelineActive ||
+          this.gameplayNightCrossfaded)
+      ) {
+        this.syncGameplayMusicCrossfade(this.lastGameplayElapsedSec);
+      }
     }
   }
 
@@ -119,7 +133,49 @@ export class MusicManager {
   private tryResumeActiveTrack(): void {
     if (this.isPlaybackBlocked()) return;
     if (!this.musicEnabled || !this.activeTrack) return;
+    if (this.gameplayMusicTimelineActive && !this.gameplayNightCrossfaded) {
+      this.resumeGameplayCrossfadeClips();
+      return;
+    }
+    if (this.gameplayNightCrossfaded && this.activeTrack === 'gameplayNight') {
+      this.ensureNightGameplayMusic();
+      return;
+    }
     this.play(this.activeTrack);
+  }
+
+  /** Both clips may be audible mid crossfade — do not call play(track) for just one. */
+  private resumeGameplayCrossfadeClips(): void {
+    const from = this.clips.gameplay;
+    const to = this.clips.gameplayNight;
+    if (!this.nightTrackStarted) {
+      if (from.paused) {
+        void from.play().catch(() => {
+          /* Autoplay blocked until gesture. */
+        });
+      }
+      return;
+    }
+    if (from.volume > 0.001 && from.paused) {
+      void from.play().catch(() => {
+        /* Autoplay blocked until gesture. */
+      });
+    }
+    if (to.paused) {
+      void to.play().catch(() => {
+        /* Autoplay blocked until gesture. */
+      });
+    }
+  }
+
+  private ensureNightGameplayMusic(): void {
+    const to = this.clips.gameplayNight;
+    to.volume = this.trackVolume('gameplayNight');
+    if (to.paused) {
+      void to.play().catch(() => {
+        /* Autoplay blocked until gesture. */
+      });
+    }
   }
 
   /** Effective playback volume for a single track given the current slider value. */
@@ -232,6 +288,7 @@ export class MusicManager {
   playGameplay(): void {
     this.resetGameplayCrossfadeState();
     this.gameplayNightCrossfaded = false;
+    this.lastGameplayElapsedSec = 0;
     this.play('gameplay');
   }
 
@@ -239,9 +296,50 @@ export class MusicManager {
    * Drive day→night music from game elapsed time (pauses with gameplay).
    * Day: full → fade out 40s–48s. Night: fade in 45s–50s from loop offset.
    */
+  /**
+   * Reconcile day/night playback after settings or tab pause (uses live elapsed time).
+   */
+  syncGameplayMusicCrossfade(elapsedSec: number): void {
+    if (this.isPlaybackBlocked() || !this.musicEnabled) return;
+    this.lastGameplayElapsedSec = elapsedSec;
+
+    const { gameplayNightMusicFadeInEndSec: nightEnd } = DAY_NIGHT;
+
+    if (this.gameplayNightCrossfaded && this.activeTrack !== 'gameplayNight') {
+      this.gameplayNightCrossfaded = false;
+    }
+
+    if (elapsedSec >= nightEnd && this.activeTrack !== 'gameplayNight') {
+      this.gameplayNightCrossfaded = false;
+      this.nightTrackStarted = false;
+      this.gameplayMusicTimelineActive =
+        elapsedSec >= DAY_NIGHT.gameplayDayMusicFadeOutStartSec;
+    }
+
+    if (
+      elapsedSec >= DAY_NIGHT.gameplayNightMusicFadeInStartSec &&
+      this.clips.gameplayNight.paused &&
+      (this.nightTrackStarted || elapsedSec >= nightEnd)
+    ) {
+      this.nightTrackStarted = false;
+    }
+
+    this.updateGameplayMusicCrossfade(elapsedSec);
+  }
+
   updateGameplayMusicCrossfade(elapsedSec: number): void {
+    this.lastGameplayElapsedSec = elapsedSec;
     if (this.isPlaybackBlocked()) return;
-    if (!this.musicEnabled || this.gameplayNightCrossfaded) return;
+    if (!this.musicEnabled) return;
+
+    if (this.gameplayNightCrossfaded) {
+      if (this.activeTrack === 'gameplayNight') {
+        this.ensureNightGameplayMusic();
+        return;
+      }
+      this.gameplayNightCrossfaded = false;
+    }
+
     if (this.activeTrack !== 'gameplay' && !this.gameplayMusicTimelineActive) return;
 
     const {
@@ -293,6 +391,12 @@ export class MusicManager {
     const nightFade = this.fadeT(elapsedSec, nightStart, nightEnd);
     to.volume = nightTargetVol * nightFade;
 
+    if (nightFade > 0 && to.paused) {
+      void to.play().catch(() => {
+        /* Autoplay blocked until gesture. */
+      });
+    }
+
     if (nightFade >= 1) {
       from.pause();
       from.currentTime = 0;
@@ -304,10 +408,12 @@ export class MusicManager {
     }
   }
 
-  playGameOver(): void {
+  playGameOver(variant: GameOverMusicVariant = this.gameOverMusicVariant): void {
+    this.gameOverMusicVariant = variant;
     this.resetGameplayCrossfadeState();
     this.gameplayNightCrossfaded = false;
-    this.play('gameOver');
+    const track: MusicTrack = variant === 'passed' ? 'menuUi' : 'gameOver';
+    this.play(track);
   }
 
   /**
@@ -331,13 +437,15 @@ export class MusicManager {
       }
     }
 
-    if (previousTrack !== track) {
+    const switchingTrack = previousTrack !== track;
+    if (switchingTrack) {
+      next.pause();
       this.seekTrackToStart(next, track);
     }
 
     next.volume = this.trackVolume(track);
 
-    if (!next.paused) return;
+    if (!switchingTrack && !next.paused) return;
 
     const playPromise = next.play();
     if (playPromise) {

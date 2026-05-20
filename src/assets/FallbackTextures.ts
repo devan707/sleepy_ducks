@@ -101,19 +101,26 @@ export class FallbackTextures {
           this.createTitleLogoFallback(scene);
           break;
         case ASSET_KEYS.gameOverBanner:
-          this.createGameOverBannerFallback(scene);
+        case ASSET_KEYS.uiTooSleepy:
+        case ASSET_KEYS.uiLevelPassed:
+        case ASSET_KEYS.uiLevelPassedMoonflower:
+          this.createGameOverBannerFallback(scene, key);
           break;
         case ASSET_KEYS.uiGear:
           this.createGearIconFallback(scene);
           break;
         case ASSET_KEYS.uiPlay:
         case ASSET_KEYS.uiRetry:
+        case ASSET_KEYS.uiNextLevel:
           this.createStaticDuckFallback(scene, key);
           break;
         case ASSET_KEYS.atlasMoonflowerSprout:
         case ASSET_KEYS.atlasMoonflowerBloom:
         case ASSET_KEYS.atlasMoonflowerSway:
           this.createMoonflowerAtlasFallback(scene, key, 4);
+          break;
+        case ASSET_KEYS.atlasZzz:
+          this.createDuckAtlasFallback(scene, ASSET_KEYS.atlasZzz, 16);
           break;
         case ASSET_KEYS.charmBox:
           this.createCharmBoxFallback(scene);
@@ -342,15 +349,18 @@ export class FallbackTextures {
     this.tagAsFallback(ASSET_KEYS.homeWaterfall);
   }
 
-  private static createGameOverBannerFallback(scene: Phaser.Scene): void {
+  private static createGameOverBannerFallback(
+    scene: Phaser.Scene,
+    key: AssetKey = ASSET_KEYS.gameOverBanner,
+  ): void {
     const w = 320;
     const h = 120;
     const g = scene.make.graphics({ x: 0, y: 0 }, false);
     g.fillStyle(0x2c3e50, 0.9);
     g.fillRoundedRect(0, 0, w, h, 12);
-    g.generateTexture(ASSET_KEYS.gameOverBanner, w, h);
+    g.generateTexture(key, w, h);
     g.destroy();
-    this.tagAsFallback(ASSET_KEYS.gameOverBanner);
+    this.tagAsFallback(key);
   }
 
   private static createTitleLogoFallback(scene: Phaser.Scene): void {
