@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { initAppAudioLifecycle } from './audio/appAudioLifecycle';
 import { initAudioUnlockOnGesture } from './audio/audioUnlock';
 import { GAME_HEIGHT, GAME_WIDTH } from './config/gameConfig';
+import { isMobileGameplayProfile } from './config/performanceProfile';
 import { AssetLoaderScene } from './scenes/AssetLoaderScene';
 import { BootScene } from './scenes/BootScene';
 import { GameOverScene } from './scenes/GameOverScene';
@@ -11,6 +12,9 @@ import { RulesScene } from './scenes/RulesScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { initInstallPromptCapture } from './pwa/installPrompt';
 import { registerServiceWorker } from './pwa/registerServiceWorker';
+
+const mobileProfile = isMobileGameplayProfile();
+
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game-container',
@@ -19,12 +23,12 @@ const config: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#1a3a4a',
   render: {
     powerPreference: 'high-performance',
-    antialias: true,
+    antialias: !mobileProfile,
     roundPixels: true,
   },
   fps: {
     target: 60,
-    smoothStep: true,
+    smoothStep: !mobileProfile,
   },
   scale: {
     mode: Phaser.Scale.FIT,

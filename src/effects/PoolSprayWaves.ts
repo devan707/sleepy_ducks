@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import { POOL_SPRAY } from '../config/gameConfig';
-import { isMobileGameplayProfile } from '../config/performanceProfile';
+import {
+  getPoolSprayWaveTuning,
+  isMobileGameplayProfile,
+  type PoolSprayWaveTuning,
+} from '../config/performanceProfile';
 import {
   buildPoolSprayEmitterXs,
   resolveFallsPoolSprayLine,
@@ -23,6 +27,7 @@ export class PoolSprayWaves {
   private readonly scene: Phaser.Scene;
   private readonly burstEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
   private readonly line: FallsPoolSprayLine;
+  private readonly waveTuning: PoolSprayWaveTuning;
   private ambientEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private ambientLoop: PoolSprayAmbientLoop | null = null;
   private waveTimerLtr: Phaser.Time.TimerEvent | null = null;
@@ -34,6 +39,7 @@ export class PoolSprayWaves {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.waveTuning = getPoolSprayWaveTuning(POOL_SPRAY);
     ensurePoolSprayBubbleTexture(scene);
     this.line = resolveFallsPoolSprayLine(scene);
     this.buildEmitters();
@@ -93,6 +99,7 @@ export class PoolSprayWaves {
 
   private baseConfig(): SprayParticleConfig {
     const cfg = POOL_SPRAY;
+    const tuning = this.waveTuning;
     return {
       lifespan: { min: cfg.lifespanMin, max: cfg.lifespanMax },
       speed: { min: cfg.speedMin, max: cfg.speedMax },
@@ -100,6 +107,9 @@ export class PoolSprayWaves {
       gravityY: cfg.gravityY,
       scale: { start: cfg.scaleStart, end: cfg.scaleEnd },
       alpha: { start: cfg.alphaStart, end: cfg.alphaEnd },
+      ...(tuning.burstMaxParticles !== undefined
+        ? { maxParticles: tuning.burstMaxParticles }
+        : {}),
       tint: 0xf2f9ff,
       blendMode: Phaser.BlendModes.ADD,
     };
@@ -151,11 +161,11 @@ export class PoolSprayWaves {
   }
 
   private startMicroBursts(): void {
-    const cfg = POOL_SPRAY;
+    const tuning = this.waveTuning;
     const schedule = (): void => {
       if (!this.microActive) return;
       this.microTimer = this.scene.time.delayedCall(
-        Phaser.Math.Between(cfg.microBurstMinMs, cfg.microBurstMaxMs),
+        Phaser.Math.Between(tuning.microBurstMinMs, tuning.microBurstMaxMs),
         () => {
           if (!this.microActive || this.fxPaused) {
             schedule();
@@ -168,8 +178,8 @@ export class PoolSprayWaves {
           const emitter = Phaser.Utils.Array.GetRandom(this.burstEmitters);
           if (emitter?.active) {
             const count = Phaser.Math.Between(
-              cfg.microBurstQuantityMin,
-              cfg.microBurstQuantityMax,
+              tuning.microBurstQuantityMin,
+              tuning.microBurstQuantityMax,
             );
             emitter.explode(count);
           }
@@ -181,6 +191,7 @@ export class PoolSprayWaves {
   }
 
   private scheduleWave(direction: WaveDirection, delayMs: number): void {
+    const tuning = this.waveTuning;
     const timerRef = direction === 'ltr' ? 'waveTimerLtr' : 'waveTimerRtl';
     this[timerRef]?.remove(false);
     this[timerRef] = this.scene.time.delayedCall(delayMs, () => {
@@ -189,8 +200,8 @@ export class PoolSprayWaves {
         this.fireWave(direction);
       }
       const gap = Phaser.Math.Between(
-        POOL_SPRAY.waveIntervalMinMs,
-        POOL_SPRAY.waveIntervalMaxMs,
+        tuning.waveIntervalMinMs,
+        tuning.waveIntervalMaxMs,
       );
       this.scheduleWave(direction, gap);
     });
@@ -198,6 +209,7 @@ export class PoolSprayWaves {
 
   private fireWave(direction: WaveDirection): void {
     const cfg = POOL_SPRAY;
+    const tuning = this.waveTuning;
     const count = this.burstEmitters.length;
     const order =
       direction === 'ltr'
@@ -209,7 +221,7 @@ export class PoolSprayWaves {
         if (this.fxPaused) return;
         const emitter = this.burstEmitters[emitterIndex];
         if (!emitter?.active) return;
-        const qty = Phaser.Math.Between(cfg.burstQuantityMin, cfg.burstQuantityMax);
+        const qty = Phaser.Math.Between(tuning.burstQuantityMin, tuning.burstQuantityMax);
         emitter.explode(qty);
       });
       this.burstTimers.push(timer);
@@ -219,7 +231,7 @@ export class PoolSprayWaves {
       this.scene.time.delayedCall(cfg.waveStaggerMs * 0.5, () => {
         if (this.fxPaused || !this.ambientEmitter?.active) return;
         this.ambientEmitter.explode(
-          Phaser.Math.Between(cfg.burstQuantityMin, cfg.burstQuantityMax),
+          Phaser.Math.Between(tuning.burstQuantityMin, tuning.burstQuantityMax),
         );
       });
     }
