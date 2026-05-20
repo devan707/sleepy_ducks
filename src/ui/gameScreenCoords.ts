@@ -8,13 +8,12 @@ type GameToScreenTransform = {
   offsetY: number;
 };
 
-/** Uniform scale + centering offset for FIT / ENVELOP canvas modes. */
+/** Uniform scale + centering offset for FIT letterboxing. */
 function getGameToScreenTransform(game: Phaser.Game): GameToScreenTransform {
   const rect = game.canvas.getBoundingClientRect();
   const sx = rect.width / GAME_WIDTH;
   const sy = rect.height / GAME_HEIGHT;
-  const envelop = game.scale.scaleMode === Phaser.Scale.ENVELOP;
-  const scale = envelop ? Math.max(sx, sy) : Math.min(sx, sy);
+  const scale = Math.min(sx, sy);
   const renderedW = GAME_WIDTH * scale;
   const renderedH = GAME_HEIGHT * scale;
   return {

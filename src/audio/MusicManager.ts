@@ -11,6 +11,7 @@ import {
   setMusicEnabled,
   setMusicVolume as persistMusicVolume,
 } from '../storage/audioSettings';
+import { isMasterMuted, subscribeMasterMute } from '../storage/masterMute';
 
 export type MusicTrack = 'menuUi' | 'gameplay' | 'gameplayNight' | 'gameOver';
 
@@ -31,8 +32,6 @@ export class MusicManager {
   private readonly clips: Record<MusicTrack, HTMLAudioElement>;
   private activeTrack: MusicTrack | null = null;
   private musicEnabled = isMusicEnabled();
-  /** Set after first user gesture — retries playback when clips finish buffering. */
-  private userGestureUnlocked = false;
   private gameplayNightCrossfaded = false;
   private gameplayMusicTimelineActive = false;
   private nightTrackStarted = false;
@@ -46,8 +45,46 @@ export class MusicManager {
       gameplayNight: this.createClip(GAMEPLAY_NIGHT_MUSIC_URL),
       gameOver: this.createClip(GAME_OVER_MUSIC_URL),
     };
-    this.clips.menuUi.load();
     this.applyClipVolumes();
+    this.applyMasterMute(isMasterMuted());
+    subscribeMasterMute((muted) => this.applyMasterMute(muted));
+  }
+
+  /** Mute (but keep playing) every clip so tracks keep their timeline. */
+  private applyMasterMute(muted: boolean): void {
+    for (const clip of Object.values(this.clips)) {
+      clip.muted = muted;
+    }
+  }
+
+  static getInstance(): MusicManager {
+    if (!instance) {
+      instance = new MusicManager();
+    }
+    return instance;
+  }
+
+  /** Begin downloading music files alongside the rest of the loading screen. */
+  static preload(): void {
+    const mgr = MusicManager.getInstance();
+    mgr.preloadAll();
+  }
+
+  private createClip(url: string): HTMLAudioElement {
+    const clip = new Audio(url);
+    clip.preload = 'auto';
+    clip.loop = true;
+    clip.volume = 0;
+    clip.muted = isMasterMuted();
+    return clip;
+  }
+
+  private preloadAll(): void {
+    for (const clip of Object.values(this.clips)) {
+      if (clip.readyState < HTMLMediaElement.HAVE_METADATA) {
+        clip.load();
+      }
+    }
   }
 
   private isPlaybackBlocked(): boolean {
@@ -66,51 +103,23 @@ export class MusicManager {
   resumeFromInterruption(): void {
     if (this.playbackInterruptionCount <= 0) return;
     this.playbackInterruptionCount -= 1;
-    if (this.playbackInterruptionCount === 0) {
+    if (this.playbackInterruptionCount === 0 && !this.isPlaybackBlocked()) {
       this.tryResumeActiveTrack();
     }
   }
 
-  /** Call when leaving a scene so the next scene can start fresh playback. */
+  /** Called when leaving a scene so the next scene can start fresh playback. */
   clearPlaybackInterruptions(): void {
     this.playbackInterruptionCount = 0;
+    if (typeof document !== 'undefined' && document.hidden) {
+      this.pauseForInterruption();
+    }
   }
 
   private tryResumeActiveTrack(): void {
     if (this.isPlaybackBlocked()) return;
     if (!this.musicEnabled || !this.activeTrack) return;
-
-    if (this.activeTrack === 'gameplayNight') {
-      this.play('gameplayNight');
-    } else {
-      this.play(this.activeTrack);
-    }
-  }
-
-  static getInstance(): MusicManager {
-    if (!instance) {
-      instance = new MusicManager();
-    }
-    return instance;
-  }
-
-  /**
-   * Start menu music as soon as the app bundle loads (during Phaser preload),
-   * instead of waiting for MenuScene.
-   */
-  static startEarly(): void {
-    const mgr = MusicManager.getInstance();
-    mgr.activeTrack = 'menuUi';
-    mgr.preloadAll();
-    mgr.play('menuUi');
-  }
-
-  private createClip(url: string): HTMLAudioElement {
-    const clip = new Audio(url);
-    clip.preload = 'auto';
-    clip.loop = true;
-    clip.volume = 0;
-    return clip;
+    this.play(this.activeTrack);
   }
 
   /** Effective playback volume for a single track given the current slider value. */
@@ -127,15 +136,10 @@ export class MusicManager {
 
   private seekTrackToStart(clip: HTMLAudioElement, track: MusicTrack): void {
     const startSec = this.getTrackStartSec(track);
-    if (startSec <= 0) {
-      clip.currentTime = 0;
-      return;
-    }
-    const { duration } = clip;
-    if (Number.isFinite(duration) && duration > startSec) {
+    try {
       clip.currentTime = startSec;
-    } else {
-      clip.currentTime = startSec;
+    } catch {
+      /* Element not seekable yet — browser will seek on first play. */
     }
   }
 
@@ -189,7 +193,6 @@ export class MusicManager {
     if (!this.musicEnabled) {
       this.resetGameplayCrossfadeState();
       this.pauseAll();
-      this.activeTrack = null;
       return;
     }
     if (this.activeTrack) {
@@ -201,34 +204,23 @@ export class MusicManager {
     return this.activeTrack;
   }
 
-  /** True when the active clip is actually audible (not blocked or still buffering). */
+  /** True when the active track is unpaused (may still be buffering — that's fine). */
   isActiveTrackPlaying(): boolean {
     if (!this.activeTrack || !this.musicEnabled || this.isPlaybackBlocked()) return false;
     const clip = this.clips[this.activeTrack];
-    return !clip.paused && !clip.ended && clip.currentTime > 0;
+    return !clip.paused && !clip.ended;
   }
 
-  private preloadAll(): void {
-    for (const clip of Object.values(this.clips)) {
-      if (clip.readyState < HTMLMediaElement.HAVE_METADATA) {
-        clip.load();
-      }
-    }
-  }
-
-  /** Preload clips during a user gesture (mobile unlock). */
+  /**
+   * Called inside a user-gesture handler (pointerdown / touchstart / keydown).
+   * Forces a synchronous play() so the browser registers the gesture as audio
+   * unlock for our elements. If no scene has set an active track yet, default
+   * to menu music so the first interaction always starts something.
+   */
   tryUnlock(): void {
-    this.userGestureUnlocked = true;
-    this.preloadAll();
     if (!this.musicEnabled) return;
-    if (!this.activeTrack) {
-      this.activeTrack = 'menuUi';
-    }
-    if (this.activeTrack === 'gameplayNight') {
-      this.play('gameplayNight');
-    } else {
-      this.play(this.activeTrack);
-    }
+    if (!this.activeTrack) this.activeTrack = 'menuUi';
+    this.play(this.activeTrack);
   }
 
   playMenuUi(): void {
@@ -318,27 +310,22 @@ export class MusicManager {
     this.play('gameOver');
   }
 
+  /**
+   * Switch to (or restart) a track. Synchronous: calls audio.play() directly so
+   * the browser counts it as a user-gesture-driven play when called inside one.
+   * If autoplay is blocked the catch() is silent — the next user gesture will
+   * call tryUnlock() and try again.
+   */
   private play(track: MusicTrack): void {
     const next = this.clips[track];
-    const alreadyPlaying =
-      this.activeTrack === track &&
-      this.musicEnabled &&
-      !next.paused &&
-      !next.ended &&
-      next.currentTime > 0;
-
-    if (alreadyPlaying) return;
-
     const previousTrack = this.activeTrack;
     this.activeTrack = track;
-    if (!this.musicEnabled) return;
 
-    if (this.isPlaybackBlocked()) {
-      return;
-    }
+    if (!this.musicEnabled) return;
+    if (this.isPlaybackBlocked()) return;
 
     for (const [key, clip] of Object.entries(this.clips) as [MusicTrack, HTMLAudioElement][]) {
-      if (key !== track) {
+      if (key !== track && !clip.paused) {
         clip.pause();
         clip.currentTime = 0;
       }
@@ -350,30 +337,13 @@ export class MusicManager {
 
     next.volume = this.trackVolume(track);
 
-    const startPlayback = () => {
-      if (this.activeTrack !== track || !this.musicEnabled) return;
-      const result = next.play();
-      if (result) {
-        void result.catch(() => {
-          /* Autoplay blocked until gesture — tryUnlock will retry. */
-        });
-      }
-    };
+    if (!next.paused) return;
 
-    if (next.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-      startPlayback();
-    } else {
-      next.addEventListener('canplay', startPlayback, { once: true });
-      next.addEventListener(
-        'canplaythrough',
-        () => {
-          if (this.userGestureUnlocked && next.paused) {
-            startPlayback();
-          }
-        },
-        { once: true },
-      );
-      next.load();
+    const playPromise = next.play();
+    if (playPromise) {
+      void playPromise.catch(() => {
+        /* Autoplay blocked — first user gesture will retry via tryUnlock(). */
+      });
     }
   }
 

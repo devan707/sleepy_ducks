@@ -5,8 +5,9 @@ import { registerDuckAnimations } from '../assets/DuckAnimations';
 import { ASSET_KEYS } from '../config/assets';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
-import { SettingsButton } from '../ui/SettingsButton';
+import { SettingsButton, getDefaultSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
+import { MasterMuteButton, getGameMasterMutePosition } from '../ui/MasterMuteButton';
 import { MOONFLOWER_ATLAS_KEYS } from '../config/moonflowerAssets';
 import {
   BALLOON,
@@ -22,7 +23,6 @@ import {
   STAGE,
 } from '../config/gameConfig';
 import { GameplayBottomToast } from '../ui/GameplayBottomToast';
-import { applySceneScale } from '../scale/displayScale';
 import { formatScore } from '../util/formatScore';
 import { GameEvents } from '../core/GameEvents';
 import type { GameOverData } from '../core/types';
@@ -76,6 +76,7 @@ export class GameScene extends Phaser.Scene {
   private musicManager!: MusicManager;
   private settingsDrawer!: SettingsDrawer;
   private settingsButton!: SettingsButton;
+  private masterMuteButton!: MasterMuteButton;
   private settingsPaused = false;
   private leavingViaSettings = false;
   private stage!: WaterfallStage;
@@ -110,8 +111,6 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    applySceneScale(this.game, 'fit');
-
     if (!AssetManager.hasRealGameplayArt()) {
       const wait = this.add
         .text(this.scale.width / 2, this.scale.height / 2, 'Loading…', {
@@ -178,6 +177,13 @@ export class GameScene extends Phaser.Scene {
     if (this.textures.exists(ASSET_KEYS.uiGear)) {
       this.settingsButton.refreshGearGraphic();
     }
+    const gearPos = getDefaultSettingsButtonPosition();
+    const mutePos = getGameMasterMutePosition(gearPos);
+    this.masterMuteButton = new MasterMuteButton(this, {
+      depth: STAGE.hudDepth + 3,
+      ...mutePos,
+    });
+    MasterMuteButton.setActiveGameplayPosition(mutePos);
     this.difficulty = new DifficultyManager();
     this.hud = new HUD(this);
     this.hud.setScore(0);
@@ -271,14 +277,14 @@ export class GameScene extends Phaser.Scene {
     this.spawner.stop();
     this.moonflowerController?.setEnabled(false);
     this.musicManager.pauseForInterruption();
-    this.soundManager.pauseGameplayBackground();
+    this.soundManager.pauseForInterruption();
   }
 
   private applySettingsResume(): void {
     if (!this.settingsPaused) return;
     this.settingsPaused = false;
     this.musicManager.resumeFromInterruption();
-    this.soundManager.resumeGameplayBackground();
+    this.soundManager.resumeFromInterruption();
     if (!this.isGameOver && !this.calibrationMode) {
       this.moonflowerController?.setEnabled(true);
       this.spawner.start();
@@ -372,7 +378,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private isGameplayUiTap(worldX: number, worldY: number): boolean {
-    return SettingsButton.hitsWorldPoint(worldX, worldY);
+    return (
+      SettingsButton.hitsWorldPoint(worldX, worldY) ||
+      MasterMuteButton.hitsWorldPoint(worldX, worldY)
+    );
   }
 
   private tryPointerTap(worldX: number, worldY: number): boolean {
@@ -867,6 +876,8 @@ export class GameScene extends Phaser.Scene {
     this.spawner?.destroy();
     this.settingsDrawer?.destroy();
     this.settingsButton?.destroy();
+    this.masterMuteButton?.destroy();
+    MasterMuteButton.setActiveGameplayPosition(null);
     this.soundManager?.detach();
     this.hud?.destroy();
     this.stage?.destroy();

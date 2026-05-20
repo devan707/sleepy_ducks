@@ -1,8 +1,7 @@
 import Phaser from 'phaser';
-import { COMBO_UI } from '../config/gameConfig';
 import { formatComboMultiplierLabel } from '../scoring/runScore';
 import {
-  drawComboPanelMeter,
+  drawComboTimerBar,
   getComboPanelTextLayout,
 } from '../objects/ComboCounter';
 
@@ -22,8 +21,8 @@ export function addComboRulesPreview(
   const root = scene.add.container(centerX, topY);
   root.setScale(scale);
 
-  const panel = scene.add.graphics();
-  drawComboPanelMeter(panel, timerLeft);
+  const meterGfx = scene.add.graphics();
+  drawComboTimerBar(meterGfx, timerLeft);
 
   const labelText = scene.add
     .text(0, layout.labelY, 'COMBO', {
@@ -57,8 +56,8 @@ export function addComboRulesPreview(
     })
     .setOrigin(0.5);
 
-  root.add([panel, labelText, valueText, multText]);
+  root.add([meterGfx, labelText, valueText, multText]);
   parent.add(root);
 
-  return COMBO_UI.height * scale;
+  return 72 * scale;
 }

@@ -7,6 +7,7 @@ import { SoundManager } from '../audio/SoundManager';
 import { SettingsButton, getMenuSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
 import { FloatingAnimButton } from '../ui/FloatingAnimButton';
+import { MasterMuteButton, getMenuMasterMutePosition } from '../ui/MasterMuteButton';
 import {
   addVerticalVignettes,
   createTextLink,
@@ -23,17 +24,6 @@ import {
   hideInstallPromptBanner,
   showInstallPromptBanner,
 } from '../ui/installPromptBanner';
-import {
-  applySceneScale,
-  getSceneCropInsets,
-  insetFromRight,
-  insetFromTop,
-  isCoverLayoutActive,
-  MENU_BOTTOM_EXTRA_LIFT,
-  MENU_GEAR_DOWN_NUDGE,
-  yFromBottom,
-} from '../scale/displayScale';
-
 const DEPTH = {
   bg: 0,
   vignette: 1,
@@ -49,6 +39,7 @@ export class MenuScene extends Phaser.Scene {
   private musicManager!: MusicManager;
   private settingsDrawer!: SettingsDrawer;
   private settingsButton!: SettingsButton;
+  private masterMuteButton!: MasterMuteButton;
   private titleLogo!: Phaser.GameObjects.Image;
   private playButton!: FloatingAnimButton;
   private gameReady = false;
@@ -61,9 +52,6 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
-    applySceneScale(this.game, 'cover');
-    const crop = getSceneCropInsets(this);
-
     this.starting = false;
     this.cameras.main.setBackgroundColor('#1a3a4a');
     this.soundManager = SoundManager.forScene(this);
@@ -77,22 +65,28 @@ export class MenuScene extends Phaser.Scene {
       onOpen: () => this.musicManager.pauseForInterruption(),
       onClose: () => this.musicManager.resumeFromInterruption(),
     });
+    const gearPos = getMenuSettingsButtonPosition();
     this.settingsButton = new SettingsButton(this, {
       drawer: this.settingsDrawer,
       depth: DEPTH.ui + 5,
       alpha: 0.78,
-      ...this.getMenuSettingsPosition(crop),
+      ...gearPos,
     });
     if (this.textures.exists(ASSET_KEYS.uiGear)) {
       this.settingsButton.refreshGearGraphic();
     }
+    this.masterMuteButton = new MasterMuteButton(this, {
+      depth: DEPTH.ui + 5,
+      alpha: 0.78,
+      ...getMenuMasterMutePosition(gearPos),
+    });
 
     this.createBackground();
     addVerticalVignettes(this, DEPTH.vignette);
-    this.createTitleBlock(crop);
-    this.createPlayButton(crop);
-    this.createRulesLink(crop);
-    this.createLoadOverlay(crop);
+    this.createTitleBlock();
+    this.createPlayButton();
+    this.createRulesLink();
+    this.createLoadOverlay();
     this.setupInput();
     this.playEntrance();
     this.gameReady = AssetManager.hasRealGameplayArt();
@@ -112,24 +106,9 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
-  private getMenuSettingsPosition(crop: ReturnType<typeof getSceneCropInsets>): {
-    x: number;
-    y: number;
-  } {
-    const base = getMenuSettingsButtonPosition();
-    return {
-      x: insetFromRight(base.x, crop.right),
-      y: insetFromTop(base.y, crop.top) + MENU_GEAR_DOWN_NUDGE,
-    };
-  }
-
-  private menuBottomLift(): number {
-    return isCoverLayoutActive(this.game) ? MENU_BOTTOM_EXTRA_LIFT : 0;
-  }
-
-  private createTitleBlock(crop: ReturnType<typeof getSceneCropInsets>): void {
+  private createTitleBlock(): void {
     const cx = GAME_WIDTH / 2;
-    const logoY = insetFromTop(92, crop.top);
+    const logoY = 92;
 
     this.titleLogo = this.add.image(cx, logoY, ASSET_KEYS.titleLogo);
     const targetW = GAME_WIDTH * 0.88;
@@ -137,19 +116,50 @@ export class MenuScene extends Phaser.Scene {
     this.titleLogo.setOrigin(0.5, 0).setDepth(DEPTH.ui).setScrollFactor(0);
 
     const taglineY = logoY + this.titleLogo.displayHeight + 20;
-    this.add
-      .text(cx, taglineY, 'Save them from the fall', titleTextStyle({ fontSize: '17px' }))
+    const tagline = this.add
+      .text(
+        cx,
+        taglineY,
+        'Save the Falling Ducks!',
+        titleTextStyle({
+          fontFamily: '"Lilita One", "Fredoka One", "Luckiest Guy", "Comic Sans MS", cursive',
+          fontStyle: 'normal',
+          fontSize: '26px',
+          color: '#ffffff',
+          stroke: '#1a0e08',
+          strokeThickness: 6,
+          shadow: {
+            offsetX: 0,
+            offsetY: 3,
+            color: '#000000',
+            blur: 4,
+            stroke: false,
+            fill: true,
+          },
+        }),
+      )
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);
+    void this.ensureTaglineFont(tagline);
 
     const high = getHighScore();
     const longestMs = getLongestTimeMs();
-    const scoreY = taglineY + 44;
-    const timeY = scoreY + 68;
+    const menuStatLabelStyle = {
+      fontSize: '17px',
+      fontStyle: 'bold' as const,
+      strokeThickness: 3,
+    };
+    const menuStatValueStyle = {
+      fontSize: '26px',
+      fontStyle: 'bold' as const,
+      strokeThickness: 3,
+    };
+    const scoreY = taglineY + 94;
+    const timeY = scoreY + 58;
     const statsPanelWidth = 272;
     const statsPanelTop = scoreY - 12;
-    const statsPanelHeight = timeY + 20 + 34 - statsPanelTop;
+    const statsPanelHeight = timeY + 26 + 28 + 16 - statsPanelTop;
 
     const statsPanel = this.add.graphics().setDepth(DEPTH.ui - 1).setScrollFactor(0);
     statsPanel.fillStyle(0x1a2830, 0.42);
@@ -162,19 +172,19 @@ export class MenuScene extends Phaser.Scene {
     );
 
     this.add
-      .text(cx, scoreY, 'BEST SCORE', labelTextStyle({ strokeThickness: 0 }))
+      .text(cx, scoreY, 'BEST SCORE', labelTextStyle({ ...menuStatLabelStyle, letterSpacing: 2 }))
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);
 
     this.add
-      .text(cx, scoreY + 20, formatScore(high), scoreTextStyle({ fontSize: '36px', strokeThickness: 0 }))
+      .text(cx, scoreY + 22, formatScore(high), scoreTextStyle(menuStatValueStyle))
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);
 
     this.add
-      .text(cx, timeY, 'BEST TIME', labelTextStyle({ strokeThickness: 0 }))
+      .text(cx, timeY, 'BEST TIME', labelTextStyle({ ...menuStatLabelStyle, letterSpacing: 2 }))
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);
@@ -182,40 +192,55 @@ export class MenuScene extends Phaser.Scene {
     this.add
       .text(
         cx,
-        timeY + 20,
+        timeY + 22,
         longestMs > 0 ? formatSurvivalTime(longestMs) : '—',
-        scoreTextStyle({ fontSize: '28px', strokeThickness: 0 }),
+        scoreTextStyle(menuStatValueStyle),
       )
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);
   }
 
-  private createPlayButton(crop: ReturnType<typeof getSceneCropInsets>): void {
+  private async ensureTaglineFont(tagline: Phaser.GameObjects.Text): Promise<void> {
+    const fontset = (document as Document & { fonts?: FontFaceSet }).fonts;
+    if (!fontset || typeof fontset.load !== 'function') return;
+    try {
+      await fontset.load('26px "Lilita One"');
+    } catch {
+      /* Font failed — fallback stack stays. */
+    }
+    if (!tagline.active) return;
+    const original = tagline.text;
+    tagline.setText(' ');
+    tagline.setText(original);
+  }
+
+  private createPlayButton(): void {
     this.playButton = new FloatingAnimButton(
       this,
       GAME_WIDTH / 2,
-      yFromBottom(112 + this.menuBottomLift(), crop.bottom),
+      GAME_HEIGHT - 142,
       ASSET_KEYS.uiPlay,
       null,
       { depth: DEPTH.ui, displayWidth: PLAY_BTN_WIDTH, autoFloat: false },
     );
   }
 
-  private createRulesLink(crop: ReturnType<typeof getSceneCropInsets>): void {
+  private createRulesLink(): void {
     createTextLink(
       this,
       GAME_WIDTH / 2,
-      yFromBottom(192 + this.menuBottomLift(), crop.bottom),
+      GAME_HEIGHT - 222,
       'How to play →',
       () => this.scene.start(SCENE_KEYS.rules),
       DEPTH.ui,
+      { fontSize: '20px', strokeThickness: 4 },
     );
   }
 
-  private createLoadOverlay(crop: ReturnType<typeof getSceneCropInsets>): void {
+  private createLoadOverlay(): void {
     const cx = GAME_WIDTH / 2;
-    const cy = yFromBottom(112 + this.menuBottomLift(), crop.bottom);
+    const cy = GAME_HEIGHT - 142;
 
     this.add
       .rectangle(cx, cy, 280, 88, 0x000000, 0)
@@ -292,11 +317,11 @@ export class MenuScene extends Phaser.Scene {
   }
 
   shutdown(): void {
-    applySceneScale(this.game, 'fit');
     this.clearInstallPromptSchedule();
     hideInstallPromptBanner();
     this.settingsDrawer?.destroy();
     this.settingsButton?.destroy();
+    this.masterMuteButton?.destroy();
     this.playButton?.destroy();
     this.soundManager?.detach();
     this.input.off('pointerdown');

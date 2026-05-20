@@ -101,6 +101,8 @@ export class Duck extends Phaser.GameObjects.Container {
   private earlyTapPausedUntilMs = 0;
   private isEarlyTapWakePose = false;
   private earlyTapResumeTimer: Phaser.Time.TimerEvent | null = null;
+  /** Score/combo credited once per duck (on save tap, not after wake anim). */
+  private savedScored = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -456,6 +458,7 @@ export class Duck extends Phaser.GameObjects.Container {
     this.showFullBody();
     this.setScale(this.getVisualScale());
     this.setDepth(STAGE.duckDepthFront);
+    this.emitDuckSaved();
   }
 
   private beginGoldenAscent(): void {
@@ -465,14 +468,6 @@ export class Duck extends Phaser.GameObjects.Container {
     this.lifecycle = 'escaping';
     this.goldenPhase = 'ascend';
     this.fallVelocity = 0;
-
-    const points = Math.round(BASE_POINTS * this.pointsMultiplier);
-    const payload: DuckSavedPayload = {
-      duck: this,
-      kind: this.kind,
-      points,
-    };
-    this.scene.events.emit(GameEvents.DUCK_SAVED, payload);
 
     const goLeft = this.x < GAME_WIDTH / 2;
     this.goldenAscendDir = goLeft ? -1 : 1;
@@ -685,6 +680,7 @@ export class Duck extends Phaser.GameObjects.Container {
     this.clearLipMask();
     this.showFullBody();
     this.applyDepth();
+    this.emitDuckSaved();
 
     this.scene.events.emit(GameEvents.DUCK_WAKING);
 
@@ -715,14 +711,6 @@ export class Duck extends Phaser.GameObjects.Container {
     this.lifecycle = 'escaping';
     this.applyDepth();
 
-    const points = Math.round(BASE_POINTS * this.pointsMultiplier);
-    const payload: DuckSavedPayload = {
-      duck: this,
-      kind: this.kind,
-      points,
-    };
-    this.scene.events.emit(GameEvents.DUCK_SAVED, payload);
-
     const goLeft = this.x < GAME_WIDTH / 2;
     this.sprite.setFlipX(goLeft);
     this.playFlyLoop();
@@ -731,6 +719,19 @@ export class Duck extends Phaser.GameObjects.Container {
     this.escapeVelocityX = (goLeft ? -1 : 1) * Phaser.Math.Between(140, 200);
     this.escapeVelocityY = Phaser.Math.Between(-80, -40);
     this.angle = goLeft ? 12 : -12;
+  }
+
+  /** Credit score/combo immediately when the save tap registers. */
+  private emitDuckSaved(): void {
+    if (this.savedScored) return;
+    this.savedScored = true;
+    const points = Math.round(BASE_POINTS * this.pointsMultiplier);
+    const payload: DuckSavedPayload = {
+      duck: this,
+      kind: this.kind,
+      points,
+    };
+    this.scene.events.emit(GameEvents.DUCK_SAVED, payload);
   }
 
   private triggerMissed(): void {

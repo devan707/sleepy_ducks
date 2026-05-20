@@ -8,10 +8,8 @@ import {
   type AssetKey,
   type AssetManifestEntry,
 } from '../config/assets';
-import { COLORS, GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
+import { GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
 import { LoadingBar } from '../ui/LoadingBar';
-import { applySceneScale } from '../scale/displayScale';
-
 const DEPTH = {
   bar: 1,
   text: 2,
@@ -26,7 +24,7 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
-    applySceneScale(this.game, 'cover');
+    MusicManager.preload();
 
     AssetManager.reset();
     AssetManager.clearGameplayTextures(this);
@@ -79,19 +77,29 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   private createGradientBackground(): void {
-    this.cameras.main.setBackgroundColor(COLORS.skyTop);
-    const bg = this.add.graphics().setDepth(0).setScrollFactor(0);
-    bg.fillGradientStyle(
-      COLORS.skyTop,
-      COLORS.skyTop,
-      COLORS.moss,
-      COLORS.mossLight,
+    const SKY_TOP = 0x1ea7e8;
+    const WATER_MID = 0xa3def5;
+    const FOAM_BOTTOM = 0xffffff;
+    const midY = Math.round(GAME_HEIGHT * 0.55);
+
+    this.cameras.main.setBackgroundColor(SKY_TOP);
+
+    const top = this.add.graphics().setDepth(0).setScrollFactor(0);
+    top.fillGradientStyle(SKY_TOP, SKY_TOP, WATER_MID, WATER_MID, 1, 1, 1, 1);
+    top.fillRect(0, 0, GAME_WIDTH, midY);
+
+    const bottom = this.add.graphics().setDepth(0).setScrollFactor(0);
+    bottom.fillGradientStyle(
+      WATER_MID,
+      WATER_MID,
+      FOAM_BOTTOM,
+      FOAM_BOTTOM,
       1,
       1,
       1,
       1,
     );
-    bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    bottom.fillRect(0, midY, GAME_WIDTH, GAME_HEIGHT - midY);
   }
 
   private createLoadingUi(): void {

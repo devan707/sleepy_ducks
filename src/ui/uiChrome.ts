@@ -183,6 +183,7 @@ export function createTextLink(
   label: string,
   onClick: () => void,
   depth: number,
+  styleOverrides?: Phaser.Types.GameObjects.Text.TextStyle,
 ): Phaser.GameObjects.Container {
   const text = scene.add
     .text(0, 0, label, outlinedTextStyle({
@@ -190,6 +191,7 @@ export function createTextLink(
       fontStyle: 'bold',
       color: UI_CHROME.accentGold,
       strokeThickness: 3,
+      ...styleOverrides,
     }))
     .setOrigin(0.5);
 

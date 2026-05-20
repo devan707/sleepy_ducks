@@ -10,6 +10,8 @@ const OUTLINE_BRIGHT = 0xffd54a;
 const FILL = 0xffd54a;
 const FILL_HI = 0xffec8a;
 const GLINT = 0xfff4a8;
+/** Empty egg interior — soft gold so the slot reads before any saves. */
+const EMPTY_FILL_ALPHA = 0.4;
 
 /** Visual state: empty outline → half gold → full gold → reward → empty. */
 export type GoldenEggMeterState = 'empty' | 'half' | 'full';
@@ -75,7 +77,11 @@ export class GoldenEggMeter {
     const g = this.fill;
     g.clear();
 
-    if (state === 'empty') return;
+    if (state === 'empty') {
+      g.fillStyle(FILL, EMPTY_FILL_ALPHA);
+      g.fillEllipse(0, 0, INNER_W, INNER_H);
+      return;
+    }
 
     if (state === 'full') {
       g.fillStyle(FILL, 1);

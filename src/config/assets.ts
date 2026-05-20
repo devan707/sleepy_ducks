@@ -28,6 +28,8 @@ export const ASSET_KEYS = {
   uiPlay: 'ui-play',
   uiRetry: 'ui-retry',
   uiGear: 'ui-gear',
+  uiSoundOn: 'ui-sound-on',
+  uiSoundOff: 'ui-sound-off',
   uiLoading: 'ui-loading',
   charmBox: 'ui-charm-box',
   atlasMoonflowerSprout: 'atlas-moonflower-sprout',
@@ -95,6 +97,16 @@ export const MENU_MANIFEST: AssetManifestEntry[] = [
   {
     key: ASSET_KEYS.uiGear,
     path: `${ASSET_ROOT}/ui/gear.png`,
+    type: 'image',
+  },
+  {
+    key: ASSET_KEYS.uiSoundOn,
+    path: `${ASSET_ROOT}/ui/sound_on.png`,
+    type: 'image',
+  },
+  {
+    key: ASSET_KEYS.uiSoundOff,
+    path: `${ASSET_ROOT}/ui/sound_off.png`,
     type: 'image',
   },
   {

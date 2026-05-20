@@ -21,8 +21,8 @@ import { GoldenEggMeter, type GoldenEggMeterState } from './GoldenEggMeter';
 import { MoonflowerHudIcon } from './MoonflowerHudIcon';
 
 const EGG_ICON_GAP = 6;
-/** Moonflower silhouette is wider than the egg — extra offset from egg center. */
-const CHARM_SLOT_OFFSET_X = 20;
+/** Golden egg is wider than the hearts column — extra offset when egg sits left of moonflower. */
+const EGG_SLOT_OFFSET_X = 20;
 
 const HEART_SIZE = 24;
 const HEART_GAP = 5;
@@ -91,9 +91,10 @@ export class HUD {
     ]);
 
     const eggY = this.scoreTop + 8 + HEART_SIZE + EGG_BELOW_HEARTS + 14;
-    const charmX = heartsRight - 11 - EGG_ICON_GAP - CHARM_SLOT_OFFSET_X;
-    this.moonflowerHudIcon = new MoonflowerHudIcon(scene, charmX, eggY);
-    this.goldenEggMeter = new GoldenEggMeter(scene, heartsRight - 10, eggY);
+    const moonflowerX = heartsRight - 10;
+    const eggX = heartsRight - 11 - EGG_ICON_GAP - EGG_SLOT_OFFSET_X;
+    this.moonflowerHudIcon = new MoonflowerHudIcon(scene, moonflowerX, eggY);
+    this.goldenEggMeter = new GoldenEggMeter(scene, eggX, eggY);
     this.hudRoot.add([
       this.moonflowerHudIcon.getContainer(),
       this.goldenEggMeter.getContainer(),

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ASSET_KEYS } from '../config/assets';
 import { GAME_HEIGHT, GAME_WIDTH, HUD_LAYOUT, HUD_TOP_PADDING } from '../config/gameConfig';
 import { createCartoonGearIcon } from './CartoonGearIcon';
+import { MasterMuteButton } from './MasterMuteButton';
 import { SettingsDrawer } from './SettingsDrawer';
 
 const RADIUS = 22;
@@ -44,6 +45,7 @@ export class SettingsButton {
 
   static consumeSceneSuppress(): boolean {
     if (SettingsDrawer.consumeSceneSuppress()) return true;
+    if (MasterMuteButton.consumeSceneSuppress()) return true;
     if (!SettingsButton.suppressScenePointer) return false;
     SettingsButton.suppressScenePointer = false;
     return true;

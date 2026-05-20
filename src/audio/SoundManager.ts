@@ -11,6 +11,7 @@ import {
   setSfxEnabled,
   setSfxVolume as persistSfxVolume,
 } from '../storage/audioSettings';
+import { isMasterMuted, subscribeMasterMute } from '../storage/masterMute';
 
 export type SoundId =
   | 'wake'
@@ -33,10 +34,14 @@ const GOLDEN_WAKE_PEAK_VOLUME = 0.7;
 const WAKE_QUACK_HOLD_MS = 250;
 const WAKE_QUACK_FADE_MS = 250;
 const WAKE_QUACK_TOTAL_MS = 500;
+const BACKGROUND_FADE_IN_MS = 1500;
+const BACKGROUND_FADE_STEP_MS = 50;
 
 type BackgroundTrack = {
   clip: HTMLAudioElement;
   peak: number;
+  fadeInterval?: number;
+  fadeTargetVolume?: number;
 };
 
 type FadeHandles = {
@@ -65,32 +70,78 @@ export class SoundManager {
   private readonly backgroundTracks: BackgroundTrack[] = [];
   private backgroundActive = false;
   private backgroundUnlockHandlersAttached = false;
+  /** Tab/app hidden, settings drawer, etc. */
+  private playbackInterruptionCount = 0;
 
   private constructor() {
+    const muted = isMasterMuted();
     this.wakeClips = WAKE_QUACK_URLS.map((url) => {
       const clip = new Audio(url);
       clip.preload = 'auto';
       clip.loop = false;
+      clip.muted = muted;
       return clip;
     });
     this.goldenWakeClip = new Audio(GOLDEN_WAKE_URL);
     this.goldenWakeClip.preload = 'auto';
     this.goldenWakeClip.loop = false;
+    this.goldenWakeClip.muted = muted;
 
     for (const { url, peak } of GAMEPLAY_BACKGROUND_LOOPS) {
       const clip = new Audio(url);
       clip.preload = 'auto';
       clip.loop = true;
       clip.volume = 0;
+      clip.muted = muted;
       this.backgroundTracks.push({ clip, peak });
     }
+
+    subscribeMasterMute((m) => this.applyMasterMute(m));
   }
 
-  static forScene(_scene: Phaser.Scene): SoundManager {
+  /** Mute every long-running sound element (loops + active quacks). */
+  private applyMasterMute(muted: boolean): void {
+    for (const clip of this.wakeClips) clip.muted = muted;
+    this.goldenWakeClip.muted = muted;
+    for (const { clip } of this.backgroundTracks) clip.muted = muted;
+    if (this.activeWakePlayback) this.activeWakePlayback.muted = muted;
+    if (this.activeGoldenPlayback) this.activeGoldenPlayback.muted = muted;
+  }
+
+  static getInstance(): SoundManager {
     if (!instance) {
       instance = new SoundManager();
     }
     return instance;
+  }
+
+  static forScene(_scene: Phaser.Scene): SoundManager {
+    return SoundManager.getInstance();
+  }
+
+  private isPlaybackBlocked(): boolean {
+    if (this.playbackInterruptionCount > 0) return true;
+    return typeof document !== 'undefined' && document.hidden;
+  }
+
+  pauseForInterruption(): void {
+    this.playbackInterruptionCount += 1;
+    if (this.playbackInterruptionCount === 1) {
+      this.stopWakeClips();
+      this.pauseGameplayBackground();
+      if (this.ctx && this.ctx.state !== 'closed') {
+        void this.ctx.suspend();
+      }
+    }
+  }
+
+  resumeFromInterruption(): void {
+    if (this.playbackInterruptionCount <= 0) return;
+    this.playbackInterruptionCount -= 1;
+    if (this.playbackInterruptionCount === 0 && !this.isPlaybackBlocked()) {
+      void this.resumeContext();
+      this.resumeGameplayBackground();
+    }
   }
 
   isEnabled(): boolean {
@@ -554,6 +605,7 @@ export class SoundManager {
     const clip = new Audio(source.src);
     clip.preload = 'auto';
     clip.loop = false;
+    clip.muted = isMasterMuted();
     const peak = this.scaledClipVolume(peakVolume);
     clip.volume = peak;
 
@@ -596,7 +648,8 @@ export class SoundManager {
   }
 
   play(id: SoundId): void {
-    if (!this.sfxEnabled) return;
+    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (isMasterMuted()) return;
 
     this.tryUnlock();
 
@@ -651,8 +704,9 @@ export class SoundManager {
 
   /** Pause loops while keeping `backgroundActive` so resume can restart them. */
   pauseGameplayBackground(): void {
-    for (const { clip } of this.backgroundTracks) {
-      clip.pause();
+    for (const track of this.backgroundTracks) {
+      this.cancelBackgroundFade(track);
+      track.clip.pause();
     }
   }
 
@@ -664,30 +718,70 @@ export class SoundManager {
   /** Fully stop ambient loops (scene shutdown / quit). */
   stopGameplayBackground(): void {
     this.backgroundActive = false;
-    for (const { clip } of this.backgroundTracks) {
-      clip.pause();
-      clip.currentTime = 0;
-      clip.volume = 0;
+    for (const track of this.backgroundTracks) {
+      this.cancelBackgroundFade(track);
+      track.clip.pause();
+      track.clip.currentTime = 0;
+      track.clip.volume = 0;
     }
   }
 
+  private getBackgroundTargetVolume(peak: number): number {
+    if (!this.sfxEnabled) return 0;
+    return Phaser.Math.Clamp(this.sfxVolume * peak, 0, 1);
+  }
+
+  private cancelBackgroundFade(track: BackgroundTrack): void {
+    if (track.fadeInterval !== undefined) {
+      clearInterval(track.fadeInterval);
+      track.fadeInterval = undefined;
+    }
+    track.fadeTargetVolume = undefined;
+  }
+
+  private startBackgroundFadeIn(track: BackgroundTrack, targetVolume: number): void {
+    this.cancelBackgroundFade(track);
+    const { clip } = track;
+    track.fadeTargetVolume = targetVolume;
+    const startVolume = clip.volume;
+    const startTime = performance.now();
+
+    track.fadeInterval = window.setInterval(() => {
+      const target = track.fadeTargetVolume ?? targetVolume;
+      const t = Math.min(1, (performance.now() - startTime) / BACKGROUND_FADE_IN_MS);
+      clip.volume = startVolume + (target - startVolume) * t;
+      if (t >= 1) {
+        clip.volume = target;
+        this.cancelBackgroundFade(track);
+      }
+    }, BACKGROUND_FADE_STEP_MS);
+  }
+
   private refreshBackgroundPlayback(): void {
-    for (const { clip, peak } of this.backgroundTracks) {
-      const targetVolume = this.sfxEnabled
-        ? Phaser.Math.Clamp(this.sfxVolume * peak, 0, 1)
-        : 0;
-      clip.volume = targetVolume;
+    for (const track of this.backgroundTracks) {
+      const { clip, peak } = track;
+      const targetVolume = this.getBackgroundTargetVolume(peak);
       const shouldPlay = this.backgroundActive && targetVolume > 0;
+
       if (shouldPlay) {
         if (clip.paused) {
+          clip.volume = 0;
+          const beginFade = () => this.startBackgroundFadeIn(track, targetVolume);
           const result = clip.play();
           if (result) {
-            void result.catch(() => {
-              // Likely needs a user gesture — handled by the pointerdown unlock hook.
+            void result.then(beginFade).catch(() => {
+              /* Autoplay blocked — pointerdown unlock will retry. */
             });
+          } else {
+            beginFade();
           }
+        } else if (track.fadeInterval !== undefined) {
+          track.fadeTargetVolume = targetVolume;
+        } else {
+          clip.volume = targetVolume;
         }
       } else {
+        this.cancelBackgroundFade(track);
         clip.pause();
       }
     }
@@ -713,8 +807,16 @@ export class SoundManager {
     document.addEventListener('touchstart', tryStart, { capture: true, passive: true });
   }
 
+  clearPlaybackInterruptions(): void {
+    this.playbackInterruptionCount = 0;
+    if (typeof document !== 'undefined' && document.hidden) {
+      this.pauseForInterruption();
+    }
+  }
+
   detach(): void {
     this.stopWakeClips();
     this.stopGameplayBackground();
+    this.clearPlaybackInterruptions();
   }
 }

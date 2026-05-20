@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { MusicManager } from './audio/MusicManager';
+import { initAppAudioLifecycle } from './audio/appAudioLifecycle';
+import { initAudioUnlockOnGesture } from './audio/audioUnlock';
 import { GAME_HEIGHT, GAME_WIDTH } from './config/gameConfig';
 import { AssetLoaderScene } from './scenes/AssetLoaderScene';
 import { BootScene } from './scenes/BootScene';
@@ -10,8 +11,6 @@ import { RulesScene } from './scenes/RulesScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { initInstallPromptCapture } from './pwa/installPrompt';
 import { registerServiceWorker } from './pwa/registerServiceWorker';
-import { isMobilePhone } from './scale/displayScale';
-
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game-container',
@@ -28,9 +27,8 @@ const config: Phaser.Types.Core.GameConfig = {
     smoothStep: true,
   },
   scale: {
-    mode: isMobilePhone() ? Phaser.Scale.ENVELOP : Phaser.Scale.FIT,
+    mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    expandParent: isMobilePhone(),
   },
   input: {
     activePointers: 2,
@@ -49,40 +47,10 @@ const config: Phaser.Types.Core.GameConfig = {
   ],
 };
 
-MusicManager.startEarly();
-
 initInstallPromptCapture();
 registerServiceWorker();
-
-const stopAudioUnlockListeners = (): void => {
-  document.removeEventListener('pointerdown', unlockAudioOnGesture);
-  document.removeEventListener('touchstart', unlockAudioOnGesture);
-  document.removeEventListener('keydown', unlockAudioOnGesture);
-};
-
-const unlockAudioOnGesture = (): void => {
-  const music = MusicManager.getInstance();
-  music.tryUnlock();
-  if (music.isActiveTrackPlaying()) {
-    stopAudioUnlockListeners();
-  }
-};
-
-document.addEventListener('pointerdown', unlockAudioOnGesture, { passive: true });
-document.addEventListener('touchstart', unlockAudioOnGesture, { passive: true });
-document.addEventListener('keydown', unlockAudioOnGesture);
+initAudioUnlockOnGesture();
 
 const game = new Phaser.Game(config);
 
-if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () => {
-    const music = MusicManager.getInstance();
-    if (document.hidden) {
-      game.loop.sleep();
-      music.pauseForInterruption();
-    } else {
-      game.loop.wake();
-      music.resumeFromInterruption();
-    }
-  });
-}
+initAppAudioLifecycle(game);

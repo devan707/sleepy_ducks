@@ -2,15 +2,9 @@ import Phaser from 'phaser';
 import { ASSET_KEYS } from '../config/assets';
 import { ASSET_ROOT } from '../config/assetRoot';
 import { COLORS, SCENE_KEYS } from '../config/gameConfig';
-import { applySceneScale } from '../scale/displayScale';
-
 export class BootScene extends Phaser.Scene {
   constructor() {
     super(SCENE_KEYS.boot);
-  }
-
-  init(): void {
-    applySceneScale(this.game, 'cover');
   }
 
   preload(): void {

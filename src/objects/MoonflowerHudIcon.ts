@@ -7,6 +7,9 @@ import { MOONFLOWER_ATLAS_KEYS, MOONFLOWER_ANIM_KEYS } from '../config/moonflowe
 import { MOONFLOWER, STAGE } from '../config/gameConfig';
 
 const ICON_H = 28;
+/** Uncollected silhouette — larger and softer than the filled sway icon. */
+const SILHOUETTE_SCALE = 1.2;
+const SILHOUETTE_ALPHA = 0.5;
 const FLY_DURATION_MS = 460;
 
 /**
@@ -32,8 +35,12 @@ export class MoonflowerHudIcon {
     this.displayW = ICON_H * silAspect;
 
     this.silhouette = scene.add.image(0, 0, MOONFLOWER_HUD_SILHOUETTE_KEY);
-    this.silhouette.setDisplaySize(this.displayW, this.displayH);
+    this.silhouette.setDisplaySize(
+      this.displayW * SILHOUETTE_SCALE,
+      this.displayH * SILHOUETTE_SCALE,
+    );
     this.silhouette.setOrigin(0.5);
+    this.silhouette.setAlpha(SILHOUETTE_ALPHA);
 
     this.colored = this.createColoredSprite();
     this.colored.setVisible(false);
@@ -57,7 +64,7 @@ export class MoonflowerHudIcon {
     if (!collected) {
       this.colored.setVisible(false);
       this.silhouette.setVisible(true);
-      this.silhouette.setAlpha(1);
+      this.silhouette.setAlpha(SILHOUETTE_ALPHA);
       return;
     }
 
@@ -83,7 +90,7 @@ export class MoonflowerHudIcon {
     const startFit = startH / frame.height;
     flyer.setDisplaySize(frame.width * startFit, startH);
 
-    this.silhouette.setAlpha(1);
+    this.silhouette.setAlpha(SILHOUETTE_ALPHA);
     this.colored.setVisible(false);
 
     this.scene.tweens.add({

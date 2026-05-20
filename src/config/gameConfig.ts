@@ -208,9 +208,9 @@ export const BALLOON = {
 
 export const COMBO_UI = {
   y: GAME_HEIGHT - 108,
-  width: 207,
-  height: 107,
-  radius: 25,
+  /** Thin countdown bar centered under the combo number. */
+  timerBarWidth: 76,
+  timerBarHeight: 7,
 } as const;
 
 export const COLORS = {

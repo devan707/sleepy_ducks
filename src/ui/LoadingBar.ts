@@ -1,13 +1,13 @@
 import Phaser from 'phaser';
 import { ASSET_KEYS } from '../config/assets';
-import { COLORS } from '../config/gameConfig';
 import {
   LOADING_BAR_ART,
   getLoadingBarFillMetrics,
 } from '../config/loadingBarLayout';
 
-const FILL_COLOR = COLORS.waterLight;
-const FILL_HIGHLIGHT = COLORS.waterFoam;
+/** Lily-pad green from the title logo (main leaf + lighter top edge). */
+const FILL_COLOR = 0x76c442;
+const FILL_HIGHLIGHT = 0xa2d149;
 
 export class LoadingBar extends Phaser.GameObjects.Container {
   private readonly fillGfx: Phaser.GameObjects.Graphics;
