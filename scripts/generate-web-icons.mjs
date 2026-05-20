@@ -7,24 +7,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const publicDir = path.join(root, 'public');
 const assetsDir = path.join(publicDir, 'assets', 'ui');
-const spritesDir = path.join(publicDir, 'assets', 'sprites');
 
+const appLogo = path.join(assetsDir, 'logo.png');
 const titleLogo = path.join(assetsDir, 'title-logo.png');
 const homeWaterfall = path.join(assetsDir, 'home-waterfall.png');
-const duckSleepSheet = path.join(spritesDir, 'duck_sleep.png');
 
 /** Menu scene background — matches home screen behind the title logo. */
 const ICON_BG = '#1a3a4a';
 
 const OG_WIDTH = 1200;
 const OG_HEIGHT = 630;
-
-/** First frame of the in-game sleeping duck atlas (`duck_sleep`, frame_000). */
-const SLEEPING_DUCK_FRAME = { left: 0, top: 0, width: 472, height: 512 };
-
-async function loadSleepingDuckIcon() {
-  return sharp(duckSleepSheet).extract(SLEEPING_DUCK_FRAME).png().toBuffer();
-}
 
 async function writeSquareIcon(input, size, outPath, format = 'png') {
   const trimmed = await sharp(input).trim().toBuffer();
@@ -43,17 +35,17 @@ async function writeSquareIcon(input, size, outPath, format = 'png') {
   await pipeline.png().toFile(outPath);
 }
 
-async function writeFavicon(duckIcon) {
-  await writeSquareIcon(duckIcon, 32, path.join(publicDir, 'favicon.ico'), 'ico');
+async function writeFavicon(logo) {
+  await writeSquareIcon(logo, 32, path.join(publicDir, 'favicon.ico'), 'ico');
 }
 
-async function writeAppleTouchIcon(duckIcon) {
-  await writeSquareIcon(duckIcon, 180, path.join(publicDir, 'apple-touch-icon.png'));
+async function writeAppleTouchIcon(logo) {
+  await writeSquareIcon(logo, 180, path.join(publicDir, 'apple-touch-icon.png'));
 }
 
-async function writeManifestIcons(duckIcon) {
-  await writeSquareIcon(duckIcon, 192, path.join(publicDir, 'icon-192.png'));
-  await writeSquareIcon(duckIcon, 512, path.join(publicDir, 'icon-512.png'));
+async function writeManifestIcons(logo) {
+  await writeSquareIcon(logo, 192, path.join(publicDir, 'icon-192.png'));
+  await writeSquareIcon(logo, 512, path.join(publicDir, 'icon-512.png'));
 }
 
 async function writeOgImage() {
@@ -82,11 +74,10 @@ async function writeOgImage() {
 }
 
 await mkdir(publicDir, { recursive: true });
-const duckIcon = await loadSleepingDuckIcon();
-await writeFavicon(duckIcon);
-await writeAppleTouchIcon(duckIcon);
-await writeManifestIcons(duckIcon);
+await writeFavicon(appLogo);
+await writeAppleTouchIcon(appLogo);
+await writeManifestIcons(appLogo);
 await writeOgImage();
 console.log(
-  'Wrote public/favicon.ico, apple-touch-icon.png, icon-192.png, icon-512.png, og-image.png',
+  'Wrote public/favicon.ico, apple-touch-icon.png, icon-192.png, icon-512.png from assets/ui/logo.png; og-image.png from title-logo.png',
 );
