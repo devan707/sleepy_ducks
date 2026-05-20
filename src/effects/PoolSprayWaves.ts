@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { POOL_SPRAY } from '../config/gameConfig';
+import { isMobileGameplayProfile } from '../config/performanceProfile';
 import {
   buildPoolSprayEmitterXs,
   resolveFallsPoolSprayLine,
   type FallsPoolSprayLine,
 } from '../objects/EnvironmentLayout';
+import { PoolSprayAmbientLoop } from './PoolSprayAmbientLoop';
 import {
   ensurePoolSprayBubbleTexture,
   POOL_SPRAY_BUBBLE_KEY,
@@ -15,17 +17,20 @@ type WaveDirection = 'ltr' | 'rtl';
 
 /**
  * Chaotic upward spray at the falls base — ambient + LTR/RTL wave layers.
+ * On mobile, ambient churn uses a scrolling tile loop; waves stay live particles.
  */
 export class PoolSprayWaves {
   private readonly scene: Phaser.Scene;
-  private readonly emitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
   private readonly burstEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
   private readonly line: FallsPoolSprayLine;
+  private ambientEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+  private ambientLoop: PoolSprayAmbientLoop | null = null;
   private waveTimerLtr: Phaser.Time.TimerEvent | null = null;
   private waveTimerRtl: Phaser.Time.TimerEvent | null = null;
   private microTimer: Phaser.Time.TimerEvent | null = null;
   private burstTimers: Phaser.Time.TimerEvent[] = [];
   private microActive = true;
+  private fxPaused = false;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -41,9 +46,23 @@ export class PoolSprayWaves {
   }
 
   setSprayMask(mask: Phaser.Display.Masks.GeometryMask): void {
-    for (const emitter of this.emitters) {
+    this.ambientEmitter?.setMask(mask);
+    this.ambientLoop?.setMask(mask);
+    for (const emitter of this.burstEmitters) {
       emitter.setMask(mask);
     }
+  }
+
+  setPaused(paused: boolean): void {
+    this.fxPaused = paused;
+    if (this.ambientEmitter) {
+      this.ambientEmitter.emitting = !paused;
+    }
+    this.ambientLoop?.setPaused(paused);
+  }
+
+  update(time: number, delta: number): void {
+    this.ambientLoop?.update(time, delta);
   }
 
   destroy(): void {
@@ -58,10 +77,13 @@ export class PoolSprayWaves {
       timer.remove(false);
     }
     this.burstTimers = [];
-    for (const emitter of this.emitters) {
+    this.ambientEmitter?.destroy();
+    this.ambientEmitter = null;
+    this.ambientLoop?.destroy();
+    this.ambientLoop = null;
+    for (const emitter of this.burstEmitters) {
       emitter.destroy();
     }
-    this.emitters.length = 0;
     this.burstEmitters.length = 0;
   }
 
@@ -89,22 +111,25 @@ export class PoolSprayWaves {
     const inset = cfg.spanInsetPx;
     const zoneW = Math.max(24, this.line.width - inset * 2);
 
-    const ambient = this.scene.add.particles(
-      this.line.centerX,
-      y,
-      POOL_SPRAY_BUBBLE_KEY,
-      {
-        ...this.baseConfig(),
-        x: { min: -zoneW * 0.5, max: zoneW * 0.5 },
-        y: { min: -cfg.emitHalfH, max: cfg.emitHalfH },
-        frequency: cfg.ambientFrequency,
-        quantity: cfg.ambientQuantity,
-        emitting: true,
-      },
-    );
-    ambient.setDepth(cfg.depth);
-    ambient.setScrollFactor(0);
-    this.emitters.push(ambient);
+    if (isMobileGameplayProfile()) {
+      this.ambientLoop = new PoolSprayAmbientLoop(this.scene, this.line, y);
+    } else {
+      this.ambientEmitter = this.scene.add.particles(
+        this.line.centerX,
+        y,
+        POOL_SPRAY_BUBBLE_KEY,
+        {
+          ...this.baseConfig(),
+          x: { min: -zoneW * 0.5, max: zoneW * 0.5 },
+          y: { min: -cfg.emitHalfH, max: cfg.emitHalfH },
+          frequency: cfg.ambientFrequency,
+          quantity: cfg.ambientQuantity,
+          emitting: true,
+        },
+      );
+      this.ambientEmitter.setDepth(cfg.depth);
+      this.ambientEmitter.setScrollFactor(0);
+    }
 
     const xs = buildPoolSprayEmitterXs(
       this.line,
@@ -121,7 +146,6 @@ export class PoolSprayWaves {
       });
       emitter.setDepth(cfg.depth);
       emitter.setScrollFactor(0);
-      this.emitters.push(emitter);
       this.burstEmitters.push(emitter);
     }
   }
@@ -133,7 +157,10 @@ export class PoolSprayWaves {
       this.microTimer = this.scene.time.delayedCall(
         Phaser.Math.Between(cfg.microBurstMinMs, cfg.microBurstMaxMs),
         () => {
-          if (!this.microActive) return;
+          if (!this.microActive || this.fxPaused) {
+            schedule();
+            return;
+          }
           if (this.burstEmitters.length === 0) {
             schedule();
             return;
@@ -158,7 +185,9 @@ export class PoolSprayWaves {
     this[timerRef]?.remove(false);
     this[timerRef] = this.scene.time.delayedCall(delayMs, () => {
       this[timerRef] = null;
-      this.fireWave(direction);
+      if (!this.fxPaused) {
+        this.fireWave(direction);
+      }
       const gap = Phaser.Math.Between(
         POOL_SPRAY.waveIntervalMinMs,
         POOL_SPRAY.waveIntervalMaxMs,
@@ -177,6 +206,7 @@ export class PoolSprayWaves {
 
     order.forEach((emitterIndex, staggerIndex) => {
       const timer = this.scene.time.delayedCall(staggerIndex * cfg.waveStaggerMs, () => {
+        if (this.fxPaused) return;
         const emitter = this.burstEmitters[emitterIndex];
         if (!emitter?.active) return;
         const qty = Phaser.Math.Between(cfg.burstQuantityMin, cfg.burstQuantityMax);
@@ -185,13 +215,12 @@ export class PoolSprayWaves {
       this.burstTimers.push(timer);
     });
 
-    if (direction === 'ltr' && this.emitters[0]?.active) {
+    if (direction === 'ltr' && this.ambientEmitter?.active) {
       this.scene.time.delayedCall(cfg.waveStaggerMs * 0.5, () => {
-        if (this.emitters[0]?.active) {
-          this.emitters[0].explode(
-            Phaser.Math.Between(cfg.burstQuantityMin, cfg.burstQuantityMax),
-          );
-        }
+        if (this.fxPaused || !this.ambientEmitter?.active) return;
+        this.ambientEmitter.explode(
+          Phaser.Math.Between(cfg.burstQuantityMin, cfg.burstQuantityMax),
+        );
       });
     }
   }

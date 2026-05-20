@@ -13,7 +13,6 @@ import { LeftCliffCalibrator } from '../dev/LeftCliffCalibrator';
 import { isDevMode } from '../dev/isDevMode';
 import { DayNightCycle } from '../effects/DayNightCycle';
 import { PoolSprayWaves } from '../effects/PoolSprayWaves';
-import { RiverFoamDrift } from '../effects/RiverFoamDrift';
 import { WaterfallColumnFx } from '../effects/WaterfallColumnFx';
 import { WaterfallFlowEffect } from '../effects/WaterfallFlowEffect';
 import { createFallsBaseMistEmitter } from '../effects/ParticleEffects';
@@ -54,7 +53,6 @@ export class WaterfallStage {
   private flowEffect!: WaterfallFlowEffect;
   private mistEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
   private poolSprayWaves: PoolSprayWaves | null = null;
-  private riverFoamDrift: RiverFoamDrift | null = null;
   private waterfallColumnFx: WaterfallColumnFx | null = null;
   private lipCalibrator: EnvironmentCalibrator | null = null;
   private flowCalibrator: FlowAtlasCalibrator | null = null;
@@ -94,8 +92,6 @@ export class WaterfallStage {
     this.mistEmitter.setMask(fallsMask);
     this.poolSprayWaves = new PoolSprayWaves(scene);
     this.poolSprayWaves.setSprayMask(fallsMask);
-    this.riverFoamDrift = new RiverFoamDrift(scene);
-    this.riverFoamDrift.setMask(fallsMask);
     this.waterfallColumnFx = new WaterfallColumnFx(scene);
     this.waterfallColumnFx.setMask(fallsMask);
     this.createLeftCliff();
@@ -201,6 +197,15 @@ export class WaterfallStage {
   update(time: number, delta: number, elapsedSec: number): void {
     this.dayNight.update(elapsedSec, delta);
     this.flowEffect.update(time, delta);
+    this.poolSprayWaves?.update(time, delta);
+  }
+
+  /** Pause pool-base ambient FX while settings overlay is open. */
+  setAmbientFxPaused(paused: boolean): void {
+    this.poolSprayWaves?.setPaused(paused);
+    if (this.mistEmitter) {
+      this.mistEmitter.emitting = !paused;
+    }
   }
 
   /** 0–1 — moonflower spawns once this crosses ~0.05 after sunset. */
@@ -240,8 +245,6 @@ export class WaterfallStage {
     this.mistEmitter?.destroy();
     this.poolSprayWaves?.destroy();
     this.poolSprayWaves = null;
-    this.riverFoamDrift?.destroy();
-    this.riverFoamDrift = null;
     this.waterfallColumnFx?.destroy();
     this.waterfallColumnFx = null;
     this.rocks?.destroy();

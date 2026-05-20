@@ -60,8 +60,6 @@ export const STAGE = {
   depthFallsBaseFx: 52,
   /** Side spray + falling streaks in the falls column (behind left cliff). */
   depthFallsColumnFx: 52.25,
-  /** Meandering foam on the river surface below the falls. */
-  depthRiverFoam: 53,
   hudDepth: 100,
   /** Combo meter — above base HUD, below toasts. */
   depthComboHud: 101,
@@ -742,36 +740,6 @@ export const POOL_SPRAY = {
   scaleEnd: 0.06,
   alphaStart: 0.78,
   alphaEnd: 0,
-} as const;
-
-/** Meandering foam drifting downstream from the falls foot into the river. */
-export const RIVER_FOAM = {
-  depth: STAGE.depthRiverFoam,
-  /** Spawn band below the resolved falls-base line. */
-  spawnBelowBasePx: 34,
-  spanInsetPx: 14,
-  emitterCount: 9,
-  emitHalfW: 18,
-  emitHalfH: 10,
-  frequency: 95,
-  quantity: 1,
-  lifespanMin: 3200,
-  lifespanMax: 7800,
-  speedMin: 12,
-  speedMax: 34,
-  angleMin: 76,
-  angleMax: 104,
-  /** Alternating emitters nudge left/right for a winding path. */
-  meanderAngleSpread: 7,
-  meanderAccel: 14,
-  gravityY: 6,
-  rotateMin: -28,
-  rotateMax: 28,
-  scaleStart: 0.12,
-  scaleEnd: 0.44,
-  alphaStart: 0.18,
-  alphaEnd: 0,
-  tint: 0xf6fbff,
 } as const;
 
 /** Lip-to-foot clip for vertical falls FX (excludes the open pool below). */

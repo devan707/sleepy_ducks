@@ -7,7 +7,6 @@ import {
   GAME_WIDTH,
   SPAWN_LANE,
   STAGE,
-  RIVER_FOAM,
   FALLS_COLUMN_MASK,
 } from '../config/gameConfig';
 import { isDevMode } from '../dev/isDevMode';
@@ -505,30 +504,6 @@ export function buildPoolSprayEmitterXs(
     xs.push(lo + t * (hi - lo));
   }
   return xs;
-}
-
-/** Spawn band for downstream river foam — wider pool span below the falls foot. */
-export function resolveRiverFoamSpawnLine(scene: Phaser.Scene): FallsPoolSprayLine {
-  const base = resolveFallsPoolSprayLine(scene);
-  const spawnY = base.y + RIVER_FOAM.spawnBelowBasePx;
-  const span = sampleMaskSpanAtGameY(scene, spawnY);
-
-  if (span) {
-    const left = span.left;
-    const right = span.right;
-    return {
-      y: spawnY,
-      left,
-      right,
-      centerX: (left + right) * 0.5,
-      width: right - left,
-    };
-  }
-
-  return {
-    ...base,
-    y: spawnY,
-  };
 }
 
 /** Points along the diagonal lip for streak emitters (t: 0=left … 1=right). */

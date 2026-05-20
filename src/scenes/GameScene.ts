@@ -371,12 +371,14 @@ export class GameScene extends Phaser.Scene {
     this.dreamweedController?.setEnabled(false);
     this.musicManager.pauseForSettings();
     this.soundManager.pauseForSettings();
+    this.stage.setAmbientFxPaused(true);
   }
 
   private applySettingsResume(): void {
     if (!this.settingsPaused) return;
     this.settingsPaused = false;
     hidePlayerNameOverlay();
+    this.stage.setAmbientFxPaused(false);
     this.musicManager.resumeFromSettings();
     this.soundManager.resumeFromSettings();
     if (!this.isGameOver && !this.calibrationMode) {

@@ -13,7 +13,6 @@ import {
 export const SPRAY_BUBBLE_KEY = 'fx-spray-bubble';
 export const POOL_SPRAY_BUBBLE_KEY = 'fx-pool-spray-bubble';
 export const FALLS_STREAK_BUBBLE_KEY = 'fx-falls-streak-bubble';
-export const RIVER_FOAM_KEY = 'fx-river-foam';
 
 export type RockSprayAnchor = {
   x: number;
@@ -64,23 +63,6 @@ export function ensureFallsStreakBubbleTexture(scene: Phaser.Scene): void {
   g.fillStyle(0xffffff, 0.85);
   g.fillEllipse(w / 2, h / 2, w * 0.45, h * 0.55);
   g.generateTexture(FALLS_STREAK_BUBBLE_KEY, w, h);
-  g.destroy();
-}
-
-/** Soft lumpy patch for downstream river foam. */
-export function ensureRiverFoamTexture(scene: Phaser.Scene): void {
-  if (scene.textures.exists(RIVER_FOAM_KEY)) return;
-
-  const w = 28;
-  const h = 20;
-  const g = scene.make.graphics({ x: 0, y: 0 }, false);
-  g.fillStyle(0xffffff, 0.28);
-  g.fillEllipse(w * 0.48, h * 0.52, w * 0.88, h * 0.78);
-  g.fillStyle(0xffffff, 0.55);
-  g.fillEllipse(w * 0.38, h * 0.42, w * 0.52, h * 0.48);
-  g.fillStyle(0xffffff, 0.9);
-  g.fillEllipse(w * 0.58, h * 0.38, w * 0.28, h * 0.24);
-  g.generateTexture(RIVER_FOAM_KEY, w, h);
   g.destroy();
 }
 
