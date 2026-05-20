@@ -67,6 +67,10 @@ export class DreamweedController {
     return true;
   }
 
+  containsWorldPoint(worldX: number, worldY: number): boolean {
+    return this.activeDreamweed?.containsWorldPoint(worldX, worldY) ?? false;
+  }
+
   trySwipeCollect(worldX: number, gestureStartX?: number): boolean {
     if (!this.grabbedDreamweed?.active) return false;
     const dxGrab = worldX - this.grabStartX;

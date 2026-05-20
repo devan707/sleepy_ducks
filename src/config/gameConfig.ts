@@ -583,9 +583,9 @@ export const DREAMWEED = {
   crestDurationMs: 3200,
   crestApproachSpeed: 1.55,
   /** Slow creep over the lip (initial fall velocity px/s). */
-  fallSpeedStart: 36,
-  /** Fall acceleration after the slow start — reaches duck speed quickly. */
-  fallGravityAccel: 380,
+  fallSpeedStart: 12,
+  /** Fall acceleration (px/s²) — ramps toward terminal velocity after the slow start. */
+  fallGravityAccel: 260,
   /** Cap matches mallard terminal fall velocity. */
   maxFallVelocity: 780,
   spinSpeedMin: 0.0005,

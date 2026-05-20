@@ -541,21 +541,22 @@ export class GameScene extends Phaser.Scene {
     this.musicManager.tryUnlock();
     this.soundManager.tryUnlock();
 
-    if (this.dreamweedController?.tryBeginGrab(pointer.worldX, pointer.worldY)) {
-      this.dreamweedGrabActive = true;
-      return;
-    }
-
     this.suppressTapOnPointerUp = this.tryPointerTap(
       pointer.worldX,
       pointer.worldY,
       false,
       pointer.id,
     );
-    if (
-      !this.suppressTapOnPointerUp &&
-      !this.getEmptyBadTapRejectReason(pointer.worldX, pointer.worldY)
-    ) {
+    if (this.suppressTapOnPointerUp) {
+      return;
+    }
+
+    if (this.dreamweedController?.tryBeginGrab(pointer.worldX, pointer.worldY)) {
+      this.dreamweedGrabActive = true;
+      return;
+    }
+
+    if (!this.getEmptyBadTapRejectReason(pointer.worldX, pointer.worldY)) {
       this.setBadTapPending(pointer.id);
     }
   }
@@ -585,7 +586,20 @@ export class GameScene extends Phaser.Scene {
     if (this.settingsDrawer?.isOpen()) return;
 
     if (!this.dreamweedGrabActive) {
-      if (this.dreamweedController?.tryBeginGrab(pointer.worldX, pointer.worldY)) {
+      const startedOnDuck = this.isPointerOnSleepingDuck(
+        this.pointerDownX,
+        this.pointerDownY,
+      );
+      const duckUnderPointer = this.isPointerOnSleepingDuck(
+        pointer.worldX,
+        pointer.worldY,
+      );
+      if (
+        !this.suppressTapOnPointerUp &&
+        !startedOnDuck &&
+        !duckUnderPointer &&
+        this.dreamweedController?.tryBeginGrab(pointer.worldX, pointer.worldY)
+      ) {
         this.dreamweedGrabActive = true;
         this.clearBadTapPendingForPointer(pointer.id);
       } else if (
@@ -671,6 +685,7 @@ export class GameScene extends Phaser.Scene {
       return 'balloon';
     }
     if (this.isPointerOnSleepingDuck(worldX, worldY)) return 'duck';
+    if (this.dreamweedController?.containsWorldPoint(worldX, worldY)) return 'dreamweed';
     if (this.isTapOnEarlyLockedDuck(worldX, worldY)) return 'early-locked';
     return null;
   }

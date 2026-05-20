@@ -258,6 +258,8 @@ export class Dreamweed extends Phaser.GameObjects.Container {
     const lipY = getLipYGame(this.x);
     this.y = lipY + this.layout.lipFallThreshold + 1;
     this.fallVelocity = DREAMWEED.fallSpeedStart;
+    this.rockSnagMs = 0;
+    this.rockSnagBypassUntilMs = 0;
     this.setRotation(0);
     this.applyFallVisuals();
     this.applyPoolPhase();
