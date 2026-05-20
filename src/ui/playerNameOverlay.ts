@@ -4,10 +4,10 @@ import { getPlayerName, setPlayerName } from '../storage/playerName';
 
 /** Matches the name bubble in SettingsDrawer (game-space, relative to panel X). */
 export const PLAYER_NAME_FIELD = {
-  x: 40,
-  y: 92,
-  width: 238,
-  height: 36,
+  x: 32,
+  y: 100,
+  width: 254,
+  height: 30,
 } as const;
 
 let sharedInput: HTMLInputElement | null = null;
