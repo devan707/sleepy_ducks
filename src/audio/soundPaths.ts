@@ -41,6 +41,12 @@ export const BAD_TAP_STREAK_2_URL = SOUNDFX_BASE + encodeURIComponent('xx.mp3');
 /** Three or more bad taps in a row (red X). */
 export const BAD_TAP_STREAK_3_URL = SOUNDFX_BASE + encodeURIComponent('xxx.mp3');
 
+/** Run failed — game over transition stinger. */
+export const FAIL_URL = SOUNDFX_BASE + encodeURIComponent('fail.mp3');
+
+/** Level passed run ended — success transition stinger. */
+export const SUCCESS_URL = SOUNDFX_BASE + encodeURIComponent('success.mp3');
+
 /**
  * Looping ambient beds that play during gameplay. `peak` is the maximum
  * fraction of the file's original volume when the SFX slider is at 100%.

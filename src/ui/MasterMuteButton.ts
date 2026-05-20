@@ -164,6 +164,10 @@ export class MasterMuteButton {
     this.unsubscribe();
     this.container.destroy();
   }
+
+  setHidden(hidden: boolean): void {
+    this.container.setVisible(!hidden);
+  }
 }
 
 /** Below the menu/game-over gear. */

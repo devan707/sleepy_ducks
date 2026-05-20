@@ -4,6 +4,7 @@ import { registerMoonflowerAnimations } from '../assets/MoonflowerAnimations';
 import { registerZzzAnimations } from '../assets/ZzzAnimations';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
+import { AudioSession } from '../audio/AudioSession';
 import { ensureAppActive } from '../audio/appAudioLifecycle';
 import { resetGameplayPointerSuppress } from '../input/pointerSuppress';
 import { SettingsButton, getMenuSettingsButtonPosition } from '../ui/SettingsButton';
@@ -96,15 +97,15 @@ export class GameOverScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor('#1a3a4a');
     this.soundManager = SoundManager.forScene(this);
     this.musicManager = MusicManager.getInstance();
-    this.musicManager.clearPlaybackInterruptions();
+    AudioSession.getInstance().resetForSceneTransition();
     this.musicManager.playGameOver(data.outcome === 'failed' ? 'failed' : 'passed');
     this.settingsDrawer = new SettingsDrawer(this, {
       depth: DEPTH.ui + 15,
       musicManager: this.musicManager,
       soundManager: this.soundManager,
       musicContext: 'gameOver',
-      onOpen: () => this.musicManager.pauseForSettings(),
-      onClose: () => this.musicManager.resumeFromSettings(),
+      onOpen: () => AudioSession.getInstance().onSettingsOpen(true),
+      onClose: () => AudioSession.getInstance().onSettingsOpen(false),
     });
     const gearPos = getMenuSettingsButtonPosition();
     this.settingsButton = new SettingsButton(this, {
@@ -125,6 +126,10 @@ export class GameOverScene extends Phaser.Scene {
       this.masterMuteButton.refreshIcon();
     }
     this.bottomToast = new GameplayBottomToast(this);
+
+    if (data.outcome === 'failed') {
+      this.cameras.main.fadeIn(220, 0, 0, 0);
+    }
 
     const { isNewBestScore, isNewLongestTime } = recordPersonalRun(
       data.score,
@@ -179,7 +184,16 @@ export class GameOverScene extends Phaser.Scene {
       this.createPassedButtons(cx);
     }
 
-    this.playEntrance();
+    if (data.skipEntrance) {
+      this.banner.setAlpha(1);
+      if (this.scoreCard) {
+        this.scoreCard.root.setAlpha(1);
+      }
+      this.primaryButton.root.setAlpha(1);
+      this.secondaryButton?.root.setAlpha(1);
+    } else {
+      this.playEntrance();
+    }
   }
 
   private bannerKeyFor(outcome: GameOverOutcome): AssetKey {
@@ -552,7 +566,7 @@ export class GameOverScene extends Phaser.Scene {
 
   shutdown(): void {
     hidePlayerNameOverlay();
-    this.musicManager?.clearPlaybackInterruptions();
+    AudioSession.getInstance().resetForSceneTransition();
     this.settingsDrawer?.destroy();
     this.settingsButton?.destroy();
     this.masterMuteButton?.destroy();

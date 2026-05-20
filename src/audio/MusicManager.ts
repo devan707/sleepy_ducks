@@ -12,6 +12,7 @@ import {
   setMusicVolume as persistMusicVolume,
 } from '../storage/audioSettings';
 import { isMasterMuted, subscribeMasterMute } from '../storage/masterMute';
+import { AudioSession } from './AudioSession';
 
 export type MusicTrack = 'menuUi' | 'gameplay' | 'gameplayNight' | 'gameOver';
 
@@ -38,10 +39,8 @@ export class MusicManager {
   private gameplayMusicTimelineActive = false;
   private nightTrackStarted = false;
   private gameOverMusicVariant: GameOverMusicVariant = 'failed';
-  /** Tab/app hidden, etc. — resume only when this returns to 0. */
-  private playbackInterruptionCount = 0;
-  /** In-game settings drawer — idempotent (safe for rapid open/close). */
-  private settingsPaused = false;
+  /** True while tab/app is in the background (paired with AudioSession foreground). */
+  private backgroundPaused = false;
   /** Last elapsed time passed from GameScene — used to catch up crossfade after tab/settings pause. */
   private lastGameplayElapsedSec = 0;
 
@@ -95,39 +94,48 @@ export class MusicManager {
   }
 
   private isPlaybackBlocked(): boolean {
-    if (this.settingsPaused) return true;
-    if (this.playbackInterruptionCount > 0) return true;
-    return typeof document !== 'undefined' && document.hidden;
+    return AudioSession.getInstance().isLifecycleBlocked();
   }
 
   /** Pause music while the in-game settings drawer is open. */
   pauseForSettings(): void {
-    if (this.settingsPaused) return;
-    this.settingsPaused = true;
     this.pauseAll();
   }
 
   /** Resume music after the settings drawer closes. */
   resumeFromSettings(): void {
-    if (!this.settingsPaused) return;
-    this.settingsPaused = false;
     this.resumeAfterUnblocked();
   }
 
-  /** Pause music while gameplay/UI is interrupted (hidden tab, etc.). */
-  pauseForInterruption(): void {
-    this.playbackInterruptionCount += 1;
-    if (this.playbackInterruptionCount === 1) {
-      this.pauseAll();
-    }
+  pauseForBackground(): void {
+    if (this.backgroundPaused) return;
+    this.backgroundPaused = true;
+    this.pauseAll();
   }
 
-  resumeFromInterruption(): void {
-    if (this.playbackInterruptionCount <= 0) return;
-    this.playbackInterruptionCount -= 1;
-    if (this.playbackInterruptionCount === 0) {
-      this.resumeAfterUnblocked();
-    }
+  resumeFromBackground(): void {
+    if (!this.backgroundPaused) return;
+    this.backgroundPaused = false;
+    this.resumeAfterUnblocked();
+  }
+
+  ensureLifecycleReady(): void {
+    if (this.isPlaybackBlocked()) return;
+    this.backgroundPaused = false;
+    this.resumeAfterUnblocked();
+  }
+
+  clearBackgroundPauseOnly(): void {
+    this.backgroundPaused = false;
+  }
+
+  resetSettingsPauseState(): void {
+    /* Resume path runs via ensureLifecycleReady when foregrounded. */
+  }
+
+  forceResumePlayback(): void {
+    this.backgroundPaused = false;
+    this.resumeAfterUnblocked();
   }
 
   private resumeAfterUnblocked(): void {
@@ -149,11 +157,7 @@ export class MusicManager {
 
   /** Called when leaving a scene so the next scene can start fresh playback. */
   clearPlaybackInterruptions(): void {
-    this.settingsPaused = false;
-    this.playbackInterruptionCount = 0;
-    if (typeof document !== 'undefined' && document.hidden) {
-      this.pauseForInterruption();
-    }
+    AudioSession.getInstance().resetForSceneTransition();
   }
 
   private tryResumeActiveTrack(): void {
@@ -318,7 +322,7 @@ export class MusicManager {
    * Resumes playback without re-seeking — never tears down an in-progress day/night crossfade.
    */
   tryUnlock(): void {
-    if (typeof document !== 'undefined' && document.hidden) return;
+    if (!AudioSession.getInstance().isForeground()) return;
 
     if (this.isManagingGameplayCrossfade()) {
       this.resumeGameplayCrossfadeClips();
@@ -503,7 +507,6 @@ export class MusicManager {
     this.resetGameplayCrossfadeState();
     this.gameplayNightCrossfaded = false;
     this.nightTrackStarted = false;
-    this.settingsPaused = false;
     const track: MusicTrack = variant === 'passed' ? 'menuUi' : 'gameOver';
     this.stopGameplayMusic();
     this.play(track);
@@ -546,7 +549,7 @@ export class MusicManager {
     const previousTrack = this.activeTrack;
     this.activeTrack = track;
 
-    if (this.isPlaybackBlocked()) return;
+    if (!AudioSession.getInstance().canPlay('music')) return;
 
     for (const [key, clip] of Object.entries(this.clips) as [MusicTrack, HTMLAudioElement][]) {
       if (key !== track && !clip.paused) {

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { initAppAudioLifecycle } from './audio/appAudioLifecycle';
+import { initAudioSessionDevLog } from './audio/AudioSession';
 import { initAudioUnlockOnGesture } from './audio/audioUnlock';
 import { GAME_HEIGHT, GAME_WIDTH } from './config/gameConfig';
 import { isMobileGameplayProfile } from './config/performanceProfile';
@@ -54,6 +55,7 @@ const config: Phaser.Types.Core.GameConfig = {
 initInstallPromptCapture();
 registerServiceWorker();
 initAudioUnlockOnGesture();
+initAudioSessionDevLog();
 
 const game = new Phaser.Game(config);
 

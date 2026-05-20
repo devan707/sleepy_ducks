@@ -12,6 +12,10 @@ const SETTINGS_HEAVY_FONT =
 export const LILITA_FONT =
   '"Lilita One", "Fredoka One", "Luckiest Guy", "Comic Sans MS", cursive';
 
+/** Arcade display face for pass success overlay. */
+export const LUCKIEST_FONT =
+  '"Luckiest Guy", "Lilita One", "Fredoka One", "Comic Sans MS", cursive';
+
 /**
  * Phaser bakes text into a canvas as soon as it's added. If a web font is still
  * loading when that happens, the fallback face gets baked in. Repaint after the
@@ -21,10 +25,25 @@ export async function ensureLilitaFont(
   text: Phaser.GameObjects.Text,
   fontSizePx = 26,
 ): Promise<void> {
+  await ensureWebFont(text, 'Lilita One', fontSizePx);
+}
+
+export async function ensureLuckiestFont(
+  text: Phaser.GameObjects.Text,
+  fontSizePx = 54,
+): Promise<void> {
+  await ensureWebFont(text, 'Luckiest Guy', fontSizePx);
+}
+
+async function ensureWebFont(
+  text: Phaser.GameObjects.Text,
+  family: string,
+  fontSizePx: number,
+): Promise<void> {
   const fontset = (document as Document & { fonts?: FontFaceSet }).fonts;
   if (!fontset || typeof fontset.load !== 'function') return;
   try {
-    await fontset.load(`${fontSizePx}px "Lilita One"`);
+    await fontset.load(`${fontSizePx}px "${family}"`);
   } catch {
     /* Font failed — fallback stack stays. */
   }

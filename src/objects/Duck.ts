@@ -111,6 +111,9 @@ export class Duck extends Phaser.GameObjects.Container {
   private decoyBounceVelY = 0;
   private decoySpinDegPerSec = 0;
   private lastRockBounceAtMs = 0;
+  /** When true, fatal miss holds on screen for the game-over transition. */
+  private retainForGameOver = false;
+  private fatalFlashTween: Phaser.Tweens.Tween | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -830,9 +833,34 @@ export class Duck extends Phaser.GameObjects.Container {
       y: this.y,
     };
 
+    this.scene.events.emit(GameEvents.DUCK_MISSED, payload);
+
+    if (this.retainForGameOver) {
+      this.beginFatalGameOverHold();
+      return;
+    }
+
     this.flashDamageRed(() => {
-      this.scene.events.emit(GameEvents.DUCK_MISSED, payload);
       this.destroy();
+    });
+  }
+
+  /** GameScene sets this during the synchronous DUCK_MISSED handler for last-life fails. */
+  setRetainForGameOver(retain: boolean): void {
+    this.retainForGameOver = retain;
+  }
+
+  /** Freeze on the fatal frame with a looping red flash for the fail transition. */
+  private beginFatalGameOverHold(): void {
+    this.setDepth(STAGE.depthGameOverFocusDuck);
+    this.sprite.setTint(0xff4444);
+    this.fatalFlashTween?.stop();
+    this.fatalFlashTween = this.scene.tweens.add({
+      targets: this.sprite,
+      alpha: { from: 1, to: 0.35 },
+      duration: 65,
+      yoyo: true,
+      repeat: -1,
     });
   }
 

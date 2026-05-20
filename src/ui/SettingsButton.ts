@@ -136,4 +136,8 @@ export class SettingsButton {
   destroy(): void {
     this.container.destroy();
   }
+
+  setHidden(hidden: boolean): void {
+    this.container.setVisible(!hidden);
+  }
 }

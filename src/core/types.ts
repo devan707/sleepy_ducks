@@ -12,6 +12,8 @@ export interface GameOverData {
   levelPassed: boolean;
   moonflowerCollected: boolean;
   outcome: GameOverOutcome;
+  /** When true, end screen UI is built at full opacity (revealed after pass overlay). */
+  skipEntrance?: boolean;
 }
 
 /** Future: hook for meta-progression (unlocks, XP, etc.). */

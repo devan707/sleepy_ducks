@@ -6,11 +6,13 @@ import {
   COMBO_URL,
   CRACKING_EGG_URL,
   DREAMWEED_URL,
+  FAIL_URL,
   GAMEPLAY_BACKGROUND_LOOPS,
   GOLDEN_WAKE_URL,
   LEVEL_PASS_URL,
   LIFE_URL,
   MOONFLOWER_URL,
+  SUCCESS_URL,
   WAKE_QUACK_URLS,
   WOOD_URL,
 } from './soundPaths';
@@ -22,6 +24,7 @@ import {
 } from '../storage/audioSettings';
 import { isMasterMuted, subscribeMasterMute } from '../storage/masterMute';
 import { BAD_TAP_STREAK, COMBO } from '../config/gameConfig';
+import { AudioSession } from './AudioSession';
 
 export type SoundId =
   | 'wake'
@@ -49,6 +52,8 @@ const CRACKING_EGG_PEAK_VOLUME = 0.78;
 const LEVEL_PASS_PEAK_VOLUME = 0.78;
 const CHEERING_PEAK_VOLUME = 0.72;
 const WOOD_PEAK_VOLUME = 0.74;
+const FAIL_PEAK_VOLUME = 0.41;
+const SUCCESS_PEAK_VOLUME = 0.85;
 /** Cheer follows the pass stinger by this much (ms). */
 const LEVEL_PASS_CHEER_DELAY_MS = 420;
 /** ~250 ms full quack, 250 ms fade, hard stop at 500 ms. */
@@ -92,6 +97,8 @@ export class SoundManager {
   private readonly woodClip: HTMLAudioElement;
   private readonly badTapStreak2Clip: HTMLAudioElement;
   private readonly badTapStreak3Clip: HTMLAudioElement;
+  private readonly failClip: HTMLAudioElement;
+  private readonly successClip: HTMLAudioElement;
   private lastWakeIndex = -1;
   private activeWakePlayback: HTMLAudioElement | null = null;
   private activeGoldenPlayback: HTMLAudioElement | null = null;
@@ -101,10 +108,8 @@ export class SoundManager {
   private readonly backgroundTracks: BackgroundTrack[] = [];
   private backgroundActive = false;
   private backgroundUnlockHandlersAttached = false;
-  /** Tab/app hidden, settings drawer, etc. */
-  private playbackInterruptionCount = 0;
-  /** In-game settings drawer — idempotent (safe for rapid open/close). */
-  private settingsPaused = false;
+  /** True while tab/app is in the background (paired with AudioSession foreground). */
+  private backgroundPaused = false;
   /** When false, scheduled gameplay SFX (combo stacks, etc.) are skipped. */
   private gameplaySfxActive = true;
   private scheduledSfxTimeouts: number[] = [];
@@ -174,6 +179,16 @@ export class SoundManager {
     this.badTapStreak3Clip.loop = false;
     this.badTapStreak3Clip.muted = muted;
 
+    this.failClip = new Audio(FAIL_URL);
+    this.failClip.preload = 'auto';
+    this.failClip.loop = false;
+    this.failClip.muted = muted;
+
+    this.successClip = new Audio(SUCCESS_URL);
+    this.successClip.preload = 'auto';
+    this.successClip.loop = false;
+    this.successClip.muted = muted;
+
     for (const { url, peak } of GAMEPLAY_BACKGROUND_LOOPS) {
       const clip = new Audio(url);
       clip.preload = 'auto';
@@ -200,6 +215,8 @@ export class SoundManager {
     this.woodClip.muted = muted;
     this.badTapStreak2Clip.muted = muted;
     this.badTapStreak3Clip.muted = muted;
+    this.failClip.muted = muted;
+    this.successClip.muted = muted;
     for (const { clip } of this.backgroundTracks) clip.muted = muted;
     if (this.activeWakePlayback) this.activeWakePlayback.muted = muted;
     if (this.activeGoldenPlayback) this.activeGoldenPlayback.muted = muted;
@@ -217,31 +234,37 @@ export class SoundManager {
   }
 
   private isPlaybackBlocked(): boolean {
-    if (this.settingsPaused) return true;
-    if (this.playbackInterruptionCount > 0) return true;
-    return typeof document !== 'undefined' && document.hidden;
+    return AudioSession.getInstance().isLifecycleBlocked();
   }
 
   /** Tap whiffs/buzzers — only block for settings or a hidden document. */
   private isTapFeedbackBlocked(): boolean {
-    if (this.settingsPaused) return true;
-    return typeof document !== 'undefined' && document.hidden;
+    return !AudioSession.getInstance().canPlay('tapFeedback');
   }
 
-  /**
-   * Clear stale lifecycle interruption stacking during an active tap.
-   * Blur/focus/page events can increment the counter without a matching resume.
-   */
+  /** Clear stale lifecycle blocks when the app is foregrounded. */
   reconcileTapFeedbackAudio(): void {
-    if (typeof document !== 'undefined' && document.hidden) return;
-    if (this.settingsPaused) return;
-    this.playbackInterruptionCount = 0;
+    AudioSession.getInstance().ensureReady();
+  }
+
+  /** Same reset for gameplay event SFX (duck splash, rock wood, etc.). */
+  reconcileGameplayAudio(): void {
+    AudioSession.getInstance().ensureReady();
+  }
+
+  /** Resume SFX engines after foreground or settings close. */
+  ensureLifecycleReady(): void {
+    if (this.isPlaybackBlocked()) return;
+    this.backgroundPaused = false;
+    void this.resumeContext();
+    if (this.backgroundActive) {
+      this.resumeGameplayBackground();
+    }
     this.tryUnlock();
   }
 
+  /** Pause SFX while the settings drawer is open. */
   pauseForSettings(): void {
-    if (this.settingsPaused) return;
-    this.settingsPaused = true;
     this.stopWakeClips();
     this.pauseGameplayBackground();
     if (this.ctx && this.ctx.state !== 'closed') {
@@ -250,43 +273,46 @@ export class SoundManager {
   }
 
   resumeFromSettings(): void {
-    if (!this.settingsPaused) return;
-    this.settingsPaused = false;
-    if (!this.isPlaybackBlocked()) {
-      void this.resumeContext();
-      this.resumeGameplayBackground();
+    if (this.isPlaybackBlocked()) return;
+    void this.resumeContext();
+    this.resumeGameplayBackground();
+  }
+
+  pauseForBackground(): void {
+    if (this.backgroundPaused) return;
+    this.backgroundPaused = true;
+    this.stopWakeClips();
+    this.pauseGameplayBackground();
+    if (this.ctx && this.ctx.state !== 'closed') {
+      void this.ctx.suspend();
     }
   }
 
-  pauseForInterruption(): void {
-    this.playbackInterruptionCount += 1;
-    if (this.playbackInterruptionCount === 1) {
-      this.stopWakeClips();
-      this.pauseGameplayBackground();
-      if (this.ctx && this.ctx.state !== 'closed') {
-        void this.ctx.suspend();
-      }
-    }
+  resumeFromBackground(): void {
+    if (!this.backgroundPaused) return;
+    this.backgroundPaused = false;
+    if (this.isPlaybackBlocked()) return;
+    void this.resumeContext();
+    this.resumeGameplayBackground();
   }
 
-  resumeFromInterruption(): void {
-    if (this.playbackInterruptionCount <= 0) return;
-    this.playbackInterruptionCount -= 1;
-    if (this.playbackInterruptionCount === 0 && !this.isPlaybackBlocked()) {
-      void this.resumeContext();
-      this.resumeGameplayBackground();
-    }
+  /** Clear background flag after scene transition without resuming engines. */
+  clearBackgroundPauseOnly(): void {
+    this.backgroundPaused = false;
   }
 
-  /** Force-reset interruption stacking (e.g. settings closed without onClose). */
+  /** No-op hook when session clears settings state on scene transition. */
+  resetSettingsPauseState(): void {
+    /* Engines resume via ensureLifecycleReady when foregrounded. */
+  }
+
+  /** Force-reset engines (e.g. settings closed without onClose). */
   forceResumePlayback(): void {
-    this.settingsPaused = false;
-    this.playbackInterruptionCount = 0;
-    if (!this.isPlaybackBlocked()) {
-      void this.resumeContext();
-      if (this.backgroundActive) {
-        this.resumeGameplayBackground();
-      }
+    this.backgroundPaused = false;
+    if (this.isPlaybackBlocked()) return;
+    void this.resumeContext();
+    if (this.backgroundActive) {
+      this.resumeGameplayBackground();
     }
   }
 
@@ -366,6 +392,15 @@ export class SoundManager {
     }
     if (this.badTapStreak3Clip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       this.badTapStreak3Clip.load();
+    }
+    if (this.failClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.failClip.load();
+    }
+    if (this.successClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.successClip.load();
+    }
+    if (this.woodClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.woodClip.load();
     }
   }
 
@@ -462,6 +497,84 @@ export class SoundManager {
     thumpGain.connect(ctx.destination);
     thump.start(t0);
     thump.stop(t0 + 0.14);
+  }
+
+  /** Duck hits rock or falls into the mist — splash + thump (louder than bad-tap whiff). */
+  private runDuckFallSplash(ctx: AudioContext): void {
+    const t0 = ctx.currentTime;
+    const dur = 0.22;
+    const peak = this.scaledGain(0.24);
+
+    const sampleCount = Math.floor(ctx.sampleRate * dur);
+    const buffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate);
+    const samples = buffer.getChannelData(0);
+    for (let i = 0; i < sampleCount; i++) {
+      const env = 1 - i / sampleCount;
+      samples[i] = (Math.random() * 2 - 1) * env * env;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.setValueAtTime(980, t0);
+    bandpass.frequency.exponentialRampToValueAtTime(180, t0 + dur);
+    bandpass.Q.value = 0.7;
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(peak * 0.85, t0);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t0 + dur + 0.03);
+
+    noise.connect(bandpass);
+    bandpass.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start(t0);
+    noise.stop(t0 + dur + 0.04);
+
+    const thump = ctx.createOscillator();
+    const thumpGain = ctx.createGain();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(165, t0);
+    thump.frequency.exponentialRampToValueAtTime(42, t0 + 0.16);
+    thumpGain.gain.setValueAtTime(peak, t0);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.18);
+    thump.connect(thumpGain);
+    thumpGain.connect(ctx.destination);
+    thump.start(t0);
+    thump.stop(t0 + 0.2);
+  }
+
+  private playGameplayWebAudio(fn: (ctx: AudioContext) => void): void {
+    if (!this.sfxEnabled || !this.gameplaySfxActive) return;
+    if (isMasterMuted()) return;
+    if (!AudioSession.getInstance().canPlay('gameplayEvent')) return;
+
+    AudioSession.getInstance().ensureReady();
+    if (this.isPlaybackBlocked()) return;
+
+    const ctx = this.resumeContext();
+    if (ctx?.state === 'running') {
+      fn(ctx);
+      return;
+    }
+
+    void this.ensureContextReady().then((ready) => {
+      if (!ready || !this.gameplaySfxActive || this.isPlaybackBlocked()) return;
+      fn(ready);
+    });
+  }
+
+  private playGameplayHtmlOneShot(source: HTMLAudioElement, peakVolume: number): void {
+    if (!this.sfxEnabled || !this.gameplaySfxActive) return;
+    if (isMasterMuted()) return;
+    if (!AudioSession.getInstance().canPlay('gameplayEvent')) return;
+
+    AudioSession.getInstance().ensureReady();
+    if (this.isPlaybackBlocked()) return;
+
+    this.tryUnlock();
+    this.playGenericOneShot(source, peakVolume);
   }
 
   /** Resume Web Audio during the user-gesture chain (tap feedback). */
@@ -604,7 +717,16 @@ export class SoundManager {
   ): void {
     const ctx = this.resumeContext();
     if (!ctx) return;
+    this.beepWithContext(ctx, freq, duration, type, gain);
+  }
 
+  private beepWithContext(
+    ctx: AudioContext,
+    freq: number,
+    duration: number,
+    type: OscillatorType = 'sine',
+    gain = 0.14,
+  ): void {
     const startOsc = () => {
       const osc = ctx.createOscillator();
       const g = ctx.createGain();
@@ -801,6 +923,22 @@ export class SoundManager {
     this.playGenericOneShot(this.goldenWakeClip, GOLDEN_WAKE_PEAK_VOLUME);
   }
 
+  /** Run failed — game over transition stinger. */
+  playFailStinger(): void {
+    if (!this.sfxEnabled) return;
+    if (isMasterMuted()) return;
+    this.tryUnlock();
+    this.playGenericOneShot(this.failClip, FAIL_PEAK_VOLUME);
+  }
+
+  /** Level passed run ended — success transition stinger. */
+  playSuccessStinger(): void {
+    if (!this.sfxEnabled) return;
+    if (isMasterMuted()) return;
+    this.tryUnlock();
+    this.playGenericOneShot(this.successClip, SUCCESS_PEAK_VOLUME);
+  }
+
   /** Nightfall level-pass stinger, then a short crowd cheer. */
   playLevelPassedCelebration(): void {
     if (!this.sfxEnabled || !this.gameplaySfxActive || this.isPlaybackBlocked()) return;
@@ -913,12 +1051,15 @@ export class SoundManager {
     if (!this.sfxEnabled) return;
     if (isMasterMuted()) return;
 
+    const session = AudioSession.getInstance();
     const isTapFeedback = id === 'badTap' || id === 'earlyBuzzer';
     if (isTapFeedback) {
-      if (this.isTapFeedbackBlocked()) return;
-      this.reconcileTapFeedbackAudio();
-    } else if (this.isPlaybackBlocked()) {
-      return;
+      if (!session.canPlay('tapFeedback')) return;
+      session.ensureReady();
+    } else {
+      if (!session.canPlay('gameplayEvent')) return;
+      session.ensureReady();
+      if (this.isPlaybackBlocked()) return;
     }
 
     this.tryUnlock();
@@ -933,12 +1074,12 @@ export class SoundManager {
         this.playGoldenWake();
         break;
       case 'miss':
-        if (!this.gameplaySfxActive) return;
-        this.beep(180, 0.2, 'sawtooth', 0.1);
+        this.playGameplayWebAudio((ctx) => this.runDuckFallSplash(ctx));
         break;
       case 'lifeLost':
-        if (!this.gameplaySfxActive) return;
-        this.beep(120, 0.25, 'square', 0.09);
+        this.playGameplayWebAudio((ctx) => {
+          this.beepWithContext(ctx, 120, 0.25, 'square', 0.09);
+        });
         break;
       case 'gameOver':
         this.beep(300, 0.15);
@@ -966,8 +1107,7 @@ export class SoundManager {
         }, 90);
         break;
       case 'decoyRock':
-        if (!this.gameplaySfxActive) return;
-        this.playGenericOneShot(this.woodClip, WOOD_PEAK_VOLUME);
+        this.playGameplayHtmlOneShot(this.woodClip, WOOD_PEAK_VOLUME);
         break;
     }
   }
@@ -1041,7 +1181,7 @@ export class SoundManager {
   }
 
   private refreshBackgroundPlayback(): void {
-    if (typeof document !== 'undefined' && document.hidden) {
+    if (!AudioSession.getInstance().canPlay('gameplayAmbient')) {
       this.pauseGameplayBackground();
       return;
     }
@@ -1096,18 +1236,6 @@ export class SoundManager {
   }
 
   clearPlaybackInterruptions(): void {
-    const wasInterrupted = this.playbackInterruptionCount > 0;
-    this.settingsPaused = false;
-    this.playbackInterruptionCount = 0;
-    if (typeof document !== 'undefined' && document.hidden) {
-      this.pauseForInterruption();
-      return;
-    }
-    if (wasInterrupted) {
-      void this.resumeContext();
-      if (this.backgroundActive) {
-        this.resumeGameplayBackground();
-      }
-    }
+    AudioSession.getInstance().resetForSceneTransition();
   }
 }

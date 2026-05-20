@@ -75,6 +75,24 @@ export const STAGE = {
   depthRockSpray: 58,
   /** Charm box reveal overlay. */
   depthCharmReveal: 120,
+  /** Game over fail dim layer (below focused duck). */
+  depthGameOverDim: 210,
+  /** Fatal duck held for fail transition. */
+  depthGameOverFocusDuck: 220,
+  /** Pass success blue overlay. */
+  depthGameOverPassOverlay: 300,
+} as const;
+
+/** Cinematic handoff from gameplay to GameOverScene. */
+export const GAME_OVER_TRANSITION = {
+  failTotalMs: 2200,
+  failDimPeakAlpha: 0.94,
+  failDimFadeInMs: 1100,
+  failDimFadeOutMs: 900,
+  successTotalMs: 3000,
+  successLaunchGameOverAtMs: 1200,
+  successBluePeakAlpha: 0.88,
+  successBlueColor: 0x3d7ec8,
 } as const;
 
 /** Spawn lane padding along the lip (game X; negative left = further screen-left). */
@@ -408,8 +426,10 @@ export const DIFFICULTY = {
   maxFallVelocity: 780,
   lipFallKickVelocity: 0,
   minSpawnInterval: 520,
-  minCrestDurationMs: 1500,
-  maxGravity: 620,
+  /** Floor for crest cycle length — kept near start values so late runs do not rush ducks. */
+  minCrestDurationMs: 2130,
+  /** Ceiling for fall gravity — only a small bump above the 60s step value. */
+  maxGravity: 248,
   /** Every N seconds, intensity steps up for the first minute. */
   intensityStepSec: 10,
   intensityRampSec: 60,
@@ -417,10 +437,13 @@ export const DIFFICULTY = {
   spawnIntervalByStep: [1700, 1450, 1200, 1020, 880, 760, 660] as const,
   /** Max sleeping ducks at 0s, 10s, 20s … 60s. */
   maxConcurrentByStep: [3, 3, 4, 5, 6, 6, 7] as const,
-  /** Crest cycle length (ms) at each step — shorter = ducks reach lip sooner. */
-  crestDurationByStep: [2250, 2100, 1950, 1820, 1680, 1570, 1500] as const,
-  /** Fall gravity at each step. */
-  gravityByStep: [215, 235, 260, 290, 325, 365, 400] as const,
+  /**
+   * Crest cycle length (ms) at each step — shorter = ducks reach lip sooner.
+   * Ramps gently (~5% over 60s); spawn pressure carries most of the difficulty curve.
+   */
+  crestDurationByStep: [2250, 2230, 2210, 2190, 2170, 2150, 2130] as const,
+  /** Fall gravity at each step — slight acceleration increase (~8% over 60s). */
+  gravityByStep: [215, 218, 221, 224, 227, 230, 233] as const,
   /** Ducks on the lane when a run begins (keep low for a gentle open). */
   initialSpawnCount: 2,
   /** After 60s, spawn interval eases down to minSpawnInterval over this duration. */

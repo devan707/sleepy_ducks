@@ -5,6 +5,7 @@ import { registerDuckAnimations } from '../assets/DuckAnimations';
 import { ASSET_KEYS } from '../config/assets';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
+import { AudioSession } from '../audio/AudioSession';
 import { ensureAppActive } from '../audio/appAudioLifecycle';
 import { resetGameplayPointerSuppress } from '../input/pointerSuppress';
 import { SettingsButton, getDefaultSettingsButtonPosition } from '../ui/SettingsButton';
@@ -12,6 +13,7 @@ import { SettingsDrawer } from '../ui/SettingsDrawer';
 import { hidePlayerNameOverlay } from '../ui/playerNameOverlay';
 import { MasterMuteButton, getGameMasterMutePosition } from '../ui/MasterMuteButton';
 import { LevelPassedBanner } from '../ui/LevelPassedBanner';
+import { playFailTransition, playSuccessTransition } from '../ui/GameOverTransition';
 import { MOONFLOWER_ATLAS_KEYS } from '../config/moonflowerAssets';
 import {
   BALLOON,
@@ -208,11 +210,10 @@ export class GameScene extends Phaser.Scene {
     const layout = this.stage.getLayout();
 
     this.soundManager = SoundManager.forScene(this);
-    this.soundManager.clearPlaybackInterruptions();
+    AudioSession.getInstance().resetForSceneTransition();
     this.soundManager.resumeGameplaySfx();
     this.soundManager.startGameplayBackground();
     this.musicManager = MusicManager.getInstance();
-    this.musicManager.clearPlaybackInterruptions();
     this.musicManager.playGameplay();
     this.settingsDrawer = new SettingsDrawer(this, {
       depth: STAGE.hudDepth + 20,
@@ -369,8 +370,7 @@ export class GameScene extends Phaser.Scene {
     this.spawner.stop();
     this.moonflowerController?.setEnabled(false);
     this.dreamweedController?.setEnabled(false);
-    this.musicManager.pauseForSettings();
-    this.soundManager.pauseForSettings();
+    AudioSession.getInstance().onSettingsOpen(true);
     this.stage.setAmbientFxPaused(true);
   }
 
@@ -379,8 +379,7 @@ export class GameScene extends Phaser.Scene {
     this.settingsPaused = false;
     hidePlayerNameOverlay();
     this.stage.setAmbientFxPaused(false);
-    this.musicManager.resumeFromSettings();
-    this.soundManager.resumeFromSettings();
+    AudioSession.getInstance().onSettingsOpen(false);
     if (!this.isGameOver && !this.calibrationMode) {
       this.moonflowerController?.setEnabled(true);
       this.dreamweedController?.setEnabled(true);
@@ -413,7 +412,7 @@ export class GameScene extends Phaser.Scene {
     hidePlayerNameOverlay();
     this.spawner.stop();
     this.settingsDrawer.close();
-    this.musicManager.clearPlaybackInterruptions();
+    AudioSession.getInstance().resetForSceneTransition();
     this.musicManager.pauseAll();
     this.soundManager.stopGameplayBackground();
     this.cameras.main.fadeOut(280, 0, 0, 0);
@@ -475,8 +474,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!drawerOpen) {
-      this.soundManager.forceResumePlayback();
-      this.soundManager.reconcileTapFeedbackAudio();
+      AudioSession.getInstance().forceResume();
+      AudioSession.getInstance().ensureReady();
     }
   }
 
@@ -969,7 +968,7 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(GameEvents.LIVES_CHANGED, this.lives);
 
     if (this.lives <= 0) {
-      this.triggerGameOver();
+      this.triggerGameOverInstant();
     } else {
       this.spawner.scheduleGoldenAfterLifeLoss();
     }
@@ -1226,6 +1225,17 @@ export class GameScene extends Phaser.Scene {
 
     if (this.isGameOver || isWatchModeActive()) return;
 
+    const isFinalLife = this.lives === 1;
+    if (isFinalLife) {
+      if (!this.levelPassedThisRun) {
+        payload.duck.setRetainForGameOver(true);
+        this.beginFailGameOverTransition(payload);
+      } else {
+        this.beginPassGameOverTransition(payload);
+      }
+      return;
+    }
+
     this.loseOneLife(x, y, {
       text: '-1 ♥',
       color: '#ff6b6b',
@@ -1242,16 +1252,32 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(GameEvents.COMBO_CHANGED, 0);
   }
 
-  private triggerGameOver(): void {
+  private applyFinalLifeLoss(x: number, y: number): void {
+    this.lifeLossCooldown = true;
+    this.time.delayedCall(120, () => {
+      this.lifeLossCooldown = false;
+    });
+    this.resetCombo();
+    this.lives = 0;
+    this.hud.setLives(0);
+    this.hud.flashMiss();
+    this.showFloatingText(x, y, '-1 ♥', '#ff6b6b');
+    this.events.emit(GameEvents.LIVES_CHANGED, this.lives);
+  }
+
+  private enterGameOverState(): void {
     if (this.isGameOver) return;
     this.isGameOver = true;
-    this.lifeLossCooldown = true;
     this.events.emit(GameEvents.GAME_OVER);
     this.spawner.stop();
     this.dreamweedController?.stop();
     this.soundManager.stopAllGameplaySfx();
-    this.soundManager.play('gameOver');
+    this.settingsDrawer?.close();
+    this.settingsButton?.setHidden(true);
+    this.masterMuteButton?.setHidden(true);
+  }
 
+  private buildGameOverData(skipEntrance = false): GameOverData {
     const moonflowerCollected = this.moonflowerController?.isCollectedThisRun() ?? false;
     const levelPassed = this.levelPassedThisRun;
     const outcome: GameOverData['outcome'] = levelPassed
@@ -1260,9 +1286,7 @@ export class GameScene extends Phaser.Scene {
         : 'passed'
       : 'failed';
 
-    this.musicManager.playGameOver(outcome === 'failed' ? 'failed' : 'passed');
-
-    const data: GameOverData = {
+    return {
       score: this.score,
       stats: { ...this.stats },
       isNewHighScore: false,
@@ -1270,11 +1294,49 @@ export class GameScene extends Phaser.Scene {
       levelPassed,
       moonflowerCollected,
       outcome,
+      skipEntrance,
     };
+  }
 
-    this.time.delayedCall(600, () => {
+  private beginFailGameOverTransition(payload: DuckMissedPayload): void {
+    this.enterGameOverState();
+    this.applyFinalLifeLoss(payload.x, payload.y);
+    this.cameras.main.shake(140, 0.008);
+    this.soundManager.playFailStinger();
+
+    playFailTransition(this, () => {
+      const data = this.buildGameOverData(false);
       this.scene.start(SCENE_KEYS.gameOver, data);
     });
+  }
+
+  private beginPassGameOverTransition(payload: DuckMissedPayload): void {
+    this.enterGameOverState();
+    this.applyFinalLifeLoss(payload.x, payload.y);
+    this.cameras.main.shake(140, 0.008);
+    this.soundManager.playSuccessStinger();
+
+    const data = this.buildGameOverData(true);
+
+    playSuccessTransition(
+      this,
+      () => {
+        if (!this.scene.isActive()) return;
+        this.scene.launch(SCENE_KEYS.gameOver, data);
+        this.scene.bringToTop(SCENE_KEYS.game);
+      },
+      () => {
+        if (!this.scene.isActive()) return;
+        this.scene.stop();
+      },
+    );
+  }
+
+  /** Instant handoff — watch mode / fallback only. */
+  private triggerGameOverInstant(): void {
+    this.enterGameOverState();
+    const data = this.buildGameOverData(false);
+    this.scene.start(SCENE_KEYS.gameOver, data);
   }
 
   private showFloatingText(x: number, y: number, text: string, color: string): void {
@@ -1339,7 +1401,7 @@ export class GameScene extends Phaser.Scene {
       this.input.off('pointerdown', this.onAnonUnlockPointer);
       this.onAnonUnlockPointer = undefined;
     }
-    this.musicManager?.clearPlaybackInterruptions();
+    AudioSession.getInstance().resetForSceneTransition();
     this.input.off('pointerdown', this.onPointerDown, this);
     this.input.off('pointermove', this.onPointerMove, this);
     this.input.off('pointerup', this.onPointerUp, this);

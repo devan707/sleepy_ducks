@@ -1,3 +1,4 @@
+import { AudioSession } from './AudioSession';
 import { MusicManager } from './MusicManager';
 import { SoundManager } from './SoundManager';
 
@@ -15,6 +16,8 @@ export function initAudioUnlockOnGesture(): void {
   attached = true;
 
   const onGesture = (): void => {
+    AudioSession.getInstance().onUserGesture();
+
     const music = MusicManager.getInstance();
     const sound = SoundManager.getInstance();
 
