@@ -586,7 +586,7 @@ export const ROCK_OBSTACLES = {
       id: 'rock' as const,
       /** Middle-left, nudged down and toward center. */
       x: 162,
-      y: 448,
+      y: 548,
       hitTopFrac: 0.64,
       hitBottomFrac: 0.36,
       hitRadiusX: 28,
@@ -595,8 +595,8 @@ export const ROCK_OBSTACLES = {
     {
       id: 'rock2' as const,
       /** Lower-right in the cascade — palm island asset. */
-      x: 302,
-      y: 584,
+      x: 288,
+      y: 644,
       displayHeight: 104,
       /** Crown of the rock island only — palm fronds above ~0.72 are non-solid. */
       hitTopFrac: 0.58,

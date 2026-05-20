@@ -96,6 +96,10 @@ export class SoundManager {
   private backgroundUnlockHandlersAttached = false;
   /** Tab/app hidden, settings drawer, etc. */
   private playbackInterruptionCount = 0;
+  /** When false, scheduled gameplay SFX (combo stacks, etc.) are skipped. */
+  private gameplaySfxActive = true;
+  private scheduledSfxTimeouts: number[] = [];
+  private activeOneShots: HTMLAudioElement[] = [];
 
   private constructor() {
     const muted = isMasterMuted();
@@ -399,7 +403,7 @@ export class SoundManager {
 
   /** Combo meter start or milestone — stacked combo.mp3 layers at milestones. */
   playComboReward(kind: 'start' | 'milestone', milestoneTier = 0): void {
-    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (!this.sfxEnabled || !this.gameplaySfxActive || this.isPlaybackBlocked()) return;
     if (isMasterMuted()) return;
     this.tryUnlock();
     const tierBoost = kind === 'milestone' ? Math.min(milestoneTier, 6) * 0.04 : 0;
@@ -423,8 +427,7 @@ export class SoundManager {
         : stackPeakVolume;
     for (let i = 0; i < layers; i++) {
       const layerVolume = Math.min(1, stackStartVolume * LAYER_BUILD_FACTOR ** i);
-      window.setTimeout(() => {
-        if (!this.sfxEnabled || this.isPlaybackBlocked() || isMasterMuted()) return;
+      this.scheduleGameplaySfx(() => {
         this.playGenericOneShot(this.comboClip, layerVolume);
       }, i * COMBO.milestoneRewardStackMs);
     }
@@ -432,7 +435,7 @@ export class SoundManager {
 
   /** Moonflower tapped and collected. */
   playMoonflowerCollect(): void {
-    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (!this.sfxEnabled || !this.gameplaySfxActive || this.isPlaybackBlocked()) return;
     if (isMasterMuted()) return;
     this.tryUnlock();
     this.playGenericOneShot(this.moonflowerClip, MOONFLOWER_PEAK_VOLUME);
@@ -440,7 +443,7 @@ export class SoundManager {
 
   /** Balloon pop or golden egg — player gained a heart. */
   playLifeGain(): void {
-    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (!this.sfxEnabled || !this.gameplaySfxActive || this.isPlaybackBlocked()) return;
     if (isMasterMuted()) return;
     this.tryUnlock();
     this.playGenericOneShot(this.lifeClip, LIFE_PEAK_VOLUME);
@@ -448,7 +451,7 @@ export class SoundManager {
 
   /** Full golden egg cracks open (plays before life gain). */
   playGoldenEggCrack(): void {
-    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (!this.sfxEnabled || !this.gameplaySfxActive || this.isPlaybackBlocked()) return;
     if (isMasterMuted()) return;
     this.tryUnlock();
     this.playGenericOneShot(this.crackingEggClip, CRACKING_EGG_PEAK_VOLUME);
@@ -661,13 +664,12 @@ export class SoundManager {
 
   /** Nightfall level-pass stinger, then a short crowd cheer. */
   playLevelPassedCelebration(): void {
-    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (!this.sfxEnabled || !this.gameplaySfxActive || this.isPlaybackBlocked()) return;
     if (isMasterMuted()) return;
 
     this.tryUnlock();
     this.playGenericOneShot(this.levelPassClip, LEVEL_PASS_PEAK_VOLUME);
-    window.setTimeout(() => {
-      if (!this.sfxEnabled || this.isPlaybackBlocked() || isMasterMuted()) return;
+    this.scheduleGameplaySfx(() => {
       this.playGenericOneShot(this.cheeringClip, CHEERING_PEAK_VOLUME);
     }, LEVEL_PASS_CHEER_DELAY_MS);
   }
@@ -678,7 +680,77 @@ export class SoundManager {
     clip.loop = false;
     clip.muted = isMasterMuted();
     clip.volume = this.scaledClipVolume(peakVolume);
-    void clip.play().catch(() => {});
+    this.trackOneShot(clip);
+    void clip.play().catch(() => {
+      this.untrackOneShot(clip);
+    });
+  }
+
+  private trackOneShot(clip: HTMLAudioElement): void {
+    this.activeOneShots.push(clip);
+    clip.addEventListener(
+      'ended',
+      () => {
+        this.untrackOneShot(clip);
+      },
+      { once: true },
+    );
+  }
+
+  private untrackOneShot(clip: HTMLAudioElement): void {
+    const idx = this.activeOneShots.indexOf(clip);
+    if (idx >= 0) this.activeOneShots.splice(idx, 1);
+  }
+
+  private scheduleGameplaySfx(fn: () => void, delayMs: number): void {
+    const id = window.setTimeout(() => {
+      this.unscheduleSfx(id);
+      if (!this.gameplaySfxActive || !this.sfxEnabled || this.isPlaybackBlocked()) return;
+      if (isMasterMuted()) return;
+      fn();
+    }, delayMs);
+    this.scheduledSfxTimeouts.push(id);
+  }
+
+  private unscheduleSfx(id: number): void {
+    const idx = this.scheduledSfxTimeouts.indexOf(id);
+    if (idx >= 0) this.scheduledSfxTimeouts.splice(idx, 1);
+  }
+
+  private clearScheduledSfx(): void {
+    for (const id of this.scheduledSfxTimeouts) {
+      window.clearTimeout(id);
+    }
+    this.scheduledSfxTimeouts = [];
+  }
+
+  private stopActiveOneShots(): void {
+    for (const clip of this.activeOneShots) {
+      clip.pause();
+      clip.currentTime = 0;
+    }
+    this.activeOneShots = [];
+  }
+
+  /** Cut off gameplay SFX (combo layers, quacks, ambient loops) when a run ends. */
+  stopAllGameplaySfx(): void {
+    this.gameplaySfxActive = false;
+    this.clearScheduledSfx();
+    this.stopWakeClips();
+    this.stopActiveOneShots();
+    this.stopGameplayBackground();
+    if (this.ctx && this.ctx.state === 'running') {
+      void this.ctx.suspend().then(() => {
+        if (this.ctx && this.ctx.state === 'suspended') {
+          void this.ctx.resume();
+        }
+      });
+    }
+  }
+
+  /** Re-enable gameplay one-shots at the start of a new run. */
+  resumeGameplaySfx(): void {
+    this.gameplaySfxActive = true;
   }
 
   private playWakeQuack(): void {
@@ -697,15 +769,19 @@ export class SoundManager {
 
     switch (id) {
       case 'wake':
+        if (!this.gameplaySfxActive) return;
         this.playWakeQuack();
         break;
       case 'goldenWake':
+        if (!this.gameplaySfxActive) return;
         this.playGoldenWake();
         break;
       case 'miss':
+        if (!this.gameplaySfxActive) return;
         this.beep(180, 0.2, 'sawtooth', 0.1);
         break;
       case 'lifeLost':
+        if (!this.gameplaySfxActive) return;
         this.beep(120, 0.25, 'square', 0.09);
         break;
       case 'gameOver':
@@ -716,19 +792,27 @@ export class SoundManager {
         this.beep(440, 0.05, 'sine', 0.1);
         break;
       case 'bad':
+        if (!this.gameplaySfxActive) return;
         this.beep(140, 0.22, 'sawtooth', 0.12);
         break;
       case 'badTap':
+        if (!this.gameplaySfxActive) return;
         this.playBadTapWhiff();
         break;
       case 'earlyBuzzer':
+        if (!this.gameplaySfxActive) return;
         this.playTooEarlyBuzzer();
         break;
       case 'bonus':
+        if (!this.gameplaySfxActive) return;
         this.beep(660, 0.08, 'sine', 0.12);
-        window.setTimeout(() => this.beep(880, 0.1, 'sine', 0.1), 90);
+        window.setTimeout(() => {
+          if (!this.gameplaySfxActive) return;
+          this.beep(880, 0.1, 'sine', 0.1);
+        }, 90);
         break;
       case 'decoyRock':
+        if (!this.gameplaySfxActive) return;
         this.playGenericOneShot(this.woodClip, WOOD_PEAK_VOLUME);
         break;
     }
@@ -860,8 +944,7 @@ export class SoundManager {
   }
 
   detach(): void {
-    this.stopWakeClips();
-    this.stopGameplayBackground();
+    this.stopAllGameplaySfx();
     this.clearPlaybackInterruptions();
   }
 }

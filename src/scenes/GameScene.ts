@@ -174,6 +174,7 @@ export class GameScene extends Phaser.Scene {
     const layout = this.stage.getLayout();
 
     this.soundManager = SoundManager.forScene(this);
+    this.soundManager.resumeGameplaySfx();
     this.soundManager.startGameplayBackground();
     this.musicManager = MusicManager.getInstance();
     this.musicManager.playGameplay();
@@ -426,7 +427,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    this.suppressTapOnPointerUp = this.tryPointerTap(pointer.worldX, pointer.worldY);
+    this.suppressTapOnPointerUp = this.tryPointerTap(pointer.worldX, pointer.worldY, false);
+  }
+
+  private isPointerSwipe(pointer: Phaser.Input.Pointer): boolean {
+    const dx = pointer.worldX - this.pointerDownX;
+    const dy = pointer.worldY - this.pointerDownY;
+    const slop = DUCK.tapSlopPx;
+    return dx * dx + dy * dy > slop * slop;
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
@@ -456,14 +464,11 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    const dx = pointer.worldX - this.pointerDownX;
-    const dy = pointer.worldY - this.pointerDownY;
-    const slop = DUCK.tapSlopPx;
-    const useDown = dx * dx + dy * dy <= slop * slop;
-    const worldX = useDown ? this.pointerDownX : pointer.worldX;
-    const worldY = useDown ? this.pointerDownY : pointer.worldY;
+    if (this.isPointerSwipe(pointer)) {
+      return;
+    }
 
-    this.tryPointerTap(worldX, worldY);
+    this.tryPointerTap(this.pointerDownX, this.pointerDownY, true);
   }
 
   private isGameplayUiTap(worldX: number, worldY: number): boolean {
@@ -473,7 +478,11 @@ export class GameScene extends Phaser.Scene {
     );
   }
 
-  private tryPointerTap(worldX: number, worldY: number): boolean {
+  private tryPointerTap(
+    worldX: number,
+    worldY: number,
+    allowBadTap: boolean,
+  ): boolean {
     if (this.calibrationMode || this.isGameOver || this.settingsPaused) return false;
     if (this.isGameplayUiTap(worldX, worldY)) return false;
 
@@ -499,6 +508,8 @@ export class GameScene extends Phaser.Scene {
     if (duckResult !== 'none') return true;
 
     if (this.isTapOnEarlyLockedDuck(worldX, worldY)) return true;
+
+    if (!allowBadTap) return false;
 
     if (this.isTapOnDecoy(worldX, worldY)) {
       this.recordBadTap('decoy', worldX, worldY);
@@ -921,7 +932,7 @@ export class GameScene extends Phaser.Scene {
     this.events.emit(GameEvents.GAME_OVER);
     this.spawner.stop();
     this.dreamweedController?.stop();
-    this.soundManager.stopGameplayBackground();
+    this.soundManager.stopAllGameplaySfx();
     this.soundManager.play('gameOver');
 
     const moonflowerCollected = this.moonflowerController?.isCollectedThisRun() ?? false;
