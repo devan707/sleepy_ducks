@@ -25,26 +25,31 @@ import { getDrawerLayout, DRAWER_PANEL_H, type DrawerLayout } from '../scale/dis
 
 const DRAWER_W = 318;
 
-/** Tight vertical layout (panel-local coordinates). */
+/**
+ * Vertical layout (panel-local). Section blocks are spaced by SECTION_GAP;
+ * label → content within a block uses the tighter INNER_GAP.
+ */
 const DRAWER_LAYOUT = {
-  titleY: 28,
+  titleY: 26,
   closeBubbleX: DRAWER_W - 24 - 44,
-  closeBubbleY: 24,
+  closeBubbleY: 20,
   closeBubbleSize: 44,
-  nameY: 64,
+  nameY: 74,
   nameH: 56,
-  nameLabelY: 74,
-  musicY: 134,
+  nameLabelY: 84,
+  musicY: 140,
   volumeRowH: 64,
-  sfxY: 208,
-  bestsTitleY: 284,
-  bestsStartY: 328,
+  sfxY: 214,
+  bestsTitleY: 288,
+  bestsTitleH: 36,
+  bestsStartY: 332,
   statCardH: 70,
   statGap: 8,
   emptyStatsH: 84,
-  charmsHeaderY: 480,
-  charmsGridY: 528,
-  footerY: 580,
+  charmsHeaderY: 490,
+  charmsHeaderH: 44,
+  charmsGridY: 571,
+  footerY: 628,
 } as const;
 const SETTINGS_GOLD = 0xffe566;
 /** Settings panel shell — true blue (not pastel sky). */
@@ -353,16 +358,25 @@ export class SettingsDrawer {
     });
 
     const bestsTitleBubble = this.scene.add.graphics();
-    drawBubbleRect(bestsTitleBubble, 24, DRAWER_LAYOUT.bestsTitleY, DRAWER_W - 48, 36, {
-      fill: SETTINGS_PRIMARY_GREEN,
-      fillAlpha: 0.9,
-      radius: 14,
-    });
+    drawBubbleRect(
+      bestsTitleBubble,
+      24,
+      DRAWER_LAYOUT.bestsTitleY,
+      DRAWER_W - 48,
+      DRAWER_LAYOUT.bestsTitleH,
+      {
+        fill: SETTINGS_PRIMARY_GREEN,
+        fillAlpha: 0.9,
+        radius: 14,
+      },
+    );
     const bestsTitle = this.scene.add
-      .text(DRAWER_W / 2, DRAWER_LAYOUT.bestsTitleY + 18, 'YOUR PERSONAL BESTS', settingsLabelTextStyle({
-        fontSize: '11px',
-        letterSpacing: 2,
-      }))
+      .text(
+        DRAWER_W / 2,
+        DRAWER_LAYOUT.bestsTitleY + DRAWER_LAYOUT.bestsTitleH / 2,
+        'YOUR PERSONAL BESTS',
+        settingsLabelTextStyle({ fontSize: '11px', letterSpacing: 2 }),
+      )
       .setOrigin(0.5);
 
     const charmsSection = this.buildCharmsSection();
@@ -404,14 +418,16 @@ export class SettingsDrawer {
   private buildCharmsSection(): Phaser.GameObjects.GameObject[] {
     const charmsY = DRAWER_LAYOUT.charmsHeaderY;
     const glowW = DRAWER_W - 48;
-    const glowH = 44;
+    const glowH = DRAWER_LAYOUT.charmsHeaderH;
     const glowX = 24;
     const glow = this.createCharmsGlow(glowX, charmsY, glowW, glowH);
     const title = this.scene.add
-      .text(DRAWER_W / 2, charmsY + 22, 'CHARMS', settingsLabelTextStyle({
-        fontSize: '14px',
-        letterSpacing: 2,
-      }))
+      .text(
+        DRAWER_W / 2,
+        charmsY + glowH / 2,
+        'CHARMS',
+        settingsLabelTextStyle({ fontSize: '14px', letterSpacing: 2 }),
+      )
       .setOrigin(0.5);
 
     return [glow, title];

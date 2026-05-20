@@ -14,6 +14,7 @@ import {
   captionTextStyle,
   scoreTextStyle,
 } from '../ui/uiChrome';
+import { formatScore } from '../util/formatScore';
 import { ComboCounter } from './ComboCounter';
 import { burstComboCelebration } from '../effects/ParticleEffects';
 import { GoldenEggMeter, type GoldenEggMeterState } from './GoldenEggMeter';
@@ -128,7 +129,7 @@ export class HUD {
   }
 
   setScore(score: number): void {
-    this.scoreValueText.setText(String(score));
+    this.scoreValueText.setText(formatScore(score));
     this.layoutScorePanel();
   }
 

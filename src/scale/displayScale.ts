@@ -107,7 +107,7 @@ export const MENU_GEAR_DOWN_NUDGE = 14;
 
 const DRAWER_REFERENCE_W = 318;
 /** Compact settings panel height (matches SettingsDrawer content layout). */
-export const DRAWER_PANEL_H = 614;
+export const DRAWER_PANEL_H = 680;
 const DRAWER_SAFE_PAD = 14;
 
 export type SafeRect = {

@@ -1,6 +1,7 @@
 import type { RunStats } from '../models/RunStats';
 import { formatSurvivalTime } from '../models/RunStats';
 import { COLORS } from '../config/gameConfig';
+import { formatScore } from '../util/formatScore';
 
 const BESTS_KEY = 'sleeping-ducks-personal-bests';
 const LEGACY_BOARD_KEY = 'sleeping-ducks-leaderboard';
@@ -27,7 +28,7 @@ export const PERSONAL_STAT_CARDS: PersonalStatDisplay[] = [
     key: 'bestScore',
     label: 'Best score',
     fill: COLORS.waterLight,
-    format: (b) => (b.bestScore > 0 ? b.bestScore.toLocaleString() : '—'),
+    format: (b) => (b.bestScore > 0 ? formatScore(b.bestScore) : '—'),
   },
   {
     key: 'longestTimeMs',

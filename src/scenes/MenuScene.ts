@@ -17,6 +17,7 @@ import {
 import { GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
 import { formatSurvivalTime } from '../models/RunStats';
 import { getHighScore, getLongestTimeMs } from '../storage/highScore';
+import { formatScore } from '../util/formatScore';
 import { onInstallPromptReady } from '../pwa/installPrompt';
 import {
   hideInstallPromptBanner,
@@ -167,7 +168,7 @@ export class MenuScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.add
-      .text(cx, scoreY + 20, String(high), scoreTextStyle({ fontSize: '36px', strokeThickness: 0 }))
+      .text(cx, scoreY + 20, formatScore(high), scoreTextStyle({ fontSize: '36px', strokeThickness: 0 }))
       .setOrigin(0.5, 0)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0);

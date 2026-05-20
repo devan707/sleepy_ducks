@@ -23,6 +23,7 @@ import {
 } from '../config/gameConfig';
 import { GameplayBottomToast } from '../ui/GameplayBottomToast';
 import { applySceneScale } from '../scale/displayScale';
+import { formatScore } from '../util/formatScore';
 import { GameEvents } from '../core/GameEvents';
 import type { GameOverData } from '../core/types';
 import { burstSplash } from '../effects/ParticleEffects';
@@ -684,10 +685,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (kind === 'golden') {
-      this.showFloatingText(duck.x, duck.y, `+${points}!`, '#ffd700');
+      this.showFloatingText(duck.x, duck.y, `+${formatScore(points)}!`, '#ffd700');
       this.onGoldenDuckSavedForEgg(duck.x, duck.y, duck);
     } else {
-      this.showFloatingText(duck.x, duck.y, `+${points}`, '#ecf0f1');
+      this.showFloatingText(duck.x, duck.y, `+${formatScore(points)}`, '#ecf0f1');
     }
   }
 

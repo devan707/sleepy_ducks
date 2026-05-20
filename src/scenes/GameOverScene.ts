@@ -9,6 +9,7 @@ import { COLORS, GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfi
 import type { GameOverData } from '../core/types';
 import { formatSurvivalTime } from '../models/RunStats';
 import { getHighScore, recordPersonalRun } from '../storage/personalBests';
+import { formatScore } from '../util/formatScore';
 import {
   applySceneScale,
   GAME_OVER_BOTTOM_LIFT,
@@ -168,7 +169,7 @@ export class GameOverScene extends Phaser.Scene {
     }
 
     this.add
-      .text(cx, y, `${data.score}`, {
+      .text(cx, y, formatScore(data.score), {
         fontFamily: 'system-ui, -apple-system, sans-serif',
         fontSize: '44px',
         fontStyle: 'bold',
@@ -179,7 +180,7 @@ export class GameOverScene extends Phaser.Scene {
       .setScrollFactor(0);
 
     this.add
-      .text(cx, y + 38, `Best: ${high}`, {
+      .text(cx, y + 38, `Best: ${formatScore(high)}`, {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '17px',
         color: '#ffe566',
