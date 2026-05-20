@@ -54,7 +54,14 @@ export const STAGE = {
   depthNightPurple: 53,
   lipCrestDepthThreshold: 0.58,
   lipMaskInsetY: 0,
+  /** Legacy — use depthFallsBaseFx for pool-base particles. */
   mistDepth: 60,
+  /** Rising mist + spray at the falls base (behind left cliff). */
+  depthFallsBaseFx: 52,
+  /** Side spray + falling streaks in the falls column (behind left cliff). */
+  depthFallsColumnFx: 52.25,
+  /** Meandering foam on the river surface below the falls. */
+  depthRiverFoam: 53,
   hudDepth: 100,
   /** Combo meter — above base HUD, below toasts. */
   depthComboHud: 101,
@@ -66,6 +73,8 @@ export const STAGE = {
   depthMoonflower: 56,
   /** Falling dreamweed at the waterfall lip. */
   depthDreamweed: 57,
+  /** White spray bubbles on cascade rocks — above night wash. */
+  depthRockSpray: 58,
   /** Charm box reveal overlay. */
   depthCharmReveal: 120,
 } as const;
@@ -187,6 +196,23 @@ export const COMBO = {
   milestoneRewardLayers: [2, 3, 4, 4, 5, 5, 5] as const,
   /** Delay between stacked combo reward sounds (ms). */
   milestoneRewardStackMs: 300,
+} as const;
+
+/** Consecutive bad-tap feedback — orange at 2, red at 3+, with tap lockout. */
+export const BAD_TAP_STREAK = {
+  orangeAt: 2,
+  firstLockMs: 200,
+  orangeLockMs: 400,
+  redAt: 3,
+  redLockMs: 600,
+  yellowColor: '#ffd700',
+  yellowStroke: '#5a4a00',
+  orangeColor: '#ff8800',
+  orangeStroke: '#7a3800',
+  redColor: '#ff3333',
+  redStroke: '#660000',
+  streak2Volume: 1,
+  streak3Volume: 0.82,
 } as const;
 
 export type ComboMilestone = (typeof COMBO.milestones)[number];
@@ -325,12 +351,14 @@ export function getSunsetElapsedSec(): number {
  * Visual day/night may differ — these drive gameplay beats the player reads off the clock.
  */
 export const HUD_RUN_CLOCK = {
-  moonflowerHintSec: 70,
-  moonflowerSproutSec: 60,
-  moonflowerHudSec: 75,
+  moonflowerHintSec: 47,
+  moonflowerSproutSec: 70,
+  moonflowerHudSec: 70,
   /** Shown on the HUD timer this many seconds before level pass. */
-  levelPassAlmostThereLeadSec: 6,
+  levelPassAlmostThereLeadSec: 7,
   levelPassSec: 65,
+  /** Time before "Almost There!" fades (600ms shorter than default single banner). */
+  almostThereBannerHoldMs: 3000,
 } as const;
 
 export function getAlmostThereSec(): number {
@@ -352,9 +380,13 @@ export const GAMEPLAY_TOAST = {
   panelAlpha: 0.84,
   fadeInMs: 1000,
   holdMs: 2000,
+  /** Moonflower hint toast holds 1s longer than the default. */
+  moonflowerHintHoldMs: 3000,
   fadeOutMs: 1000,
   /** Raise toasts above the combo panel center. */
   yOffsetAboveCombo: 32,
+  /** Horizontal inset from screen edges for toast panels (px). */
+  panelMarginX: 28,
   panelMinWidth: 320,
   panelHeight: 100,
   panelPadX: 22,
@@ -362,6 +394,11 @@ export const GAMEPLAY_TOAST = {
   imageSize: 54,
   imageGap: 14,
   fontSize: '19px',
+  /** Moonflower hint — slightly smaller panel so wrapped text stays centered. */
+  moonflowerHintFontSize: '16px',
+  moonflowerHintImageSize: 44,
+  moonflowerHintPanelHeight: 86,
+  moonflowerHintPanelMinWidth: 268,
 } as const;
 
 /** Y center for bottom toasts — layered over the combo panel. */
@@ -559,16 +596,19 @@ export const DREAMWEED = {
   spawnRotationMax: 0.45,
   swipeMinPx: 40,
   swayFrameRate: 10,
-  despawnBelowY: GAME_HEIGHT + 80,
-  /** Fall speed while snagged on a cascade rock (px/s). */
-  rockSnagFallSpeed: 14,
-  /** Horizontal slide speed while slipping off a rock (px/s). */
-  rockSlideSpeed: 58,
-  /** Tilt while sliding off a rock (degrees, signed by slide dir). */
-  rockSlideTiltDeg: 22,
+  /** Fall speed cap while passing over cascade rocks (px/s). */
+  rockSlowFallSpeed: 68,
+  /** Max ms dreamweed may crawl on a rock before sliding off. */
+  rockMaxSnagMs: 380,
+  /** Brief boost (px/s) when sliding off a rock after max snag. */
+  rockSlideOffSpeed: 140,
+  /** Ms to ignore rock collision after sliding off (prevents re-snag). */
+  rockSnagBypassMs: 320,
+  /** Larger hit target while snagged on a rock (multiplier on hitPad). */
+  rockSnagHitPad: 1.55,
 } as const;
 
-/** Animated rocks in the falls — block mallards, bounce decoys, dreamweed steers around. */
+/** Animated rocks in the falls — block mallards, bounce decoys, slow dreamweed. */
 export const ROCK_OBSTACLES = {
   displayHeight: 92,
   animFrameRate: 10,
@@ -577,6 +617,41 @@ export const ROCK_OBSTACLES = {
   decoyBounceCooldownMs: 220,
   /** Whole-sprite opacity so splash edges blend into the falls. */
   alpha: 0.8,
+  /** Tiny white bubbles — side spray off cascade rocks. */
+  spray: {
+    depth: STAGE.depthRockSpray,
+    /** Horizontal offset from rock center to each flank emitter (× hitRadiusX). */
+    flankOffsetFrac: 0.78,
+    /** Tight spawn zone on the rock flank. */
+    emitHalfW: 5,
+    emitHalfH: 16,
+    frequency: 28,
+    lifespanMin: 140,
+    lifespanMax: 320,
+    speedMin: 65,
+    speedMax: 125,
+    /** Left flank — outward to the left with a slight upward arc. */
+    leftAngleMin: 165,
+    leftAngleMax: 195,
+    /** Right flank — outward to the right with a slight upward arc. */
+    rightAngleMin: -15,
+    rightAngleMax: 15,
+    gravityY: 28,
+    scaleStart: 0.22,
+    scaleEnd: 0.05,
+    alphaStart: 0.72,
+    alphaEnd: 0,
+    quantity: 1,
+  },
+  /** Microbubble sheets dripping off the rock foot (same look as lip streaks). */
+  streak: {
+    depth: STAGE.depthFallsColumnFx + 0.08,
+    spawnBelowHitBottomPx: 6,
+    emittersPerRock: 5,
+    spanRadiusFrac: 0.9,
+    spanInsetFrac: 0.12,
+    scaleMul: 0.5,
+  },
   /** Default collidable crown — fraction of display height above the rock foot (near sprite top). */
   hitTopFrac: 0.66,
   /** Default collidable base — fraction of display height above the rock foot (lower on the rock). */
@@ -608,3 +683,120 @@ export const ROCK_OBSTACLES = {
 } as const;
 
 export type RockObstacleId = (typeof ROCK_OBSTACLES.placements)[number]['id'];
+
+/** Larger rising bubbles from the falls base (duck miss line) — behind left cliff. */
+export const FALLS_BASE_MIST = {
+  depth: STAGE.depthFallsBaseFx,
+  /** Nudge from resolved falls-base Y (negative = higher on screen). */
+  yOffsetPx: -4,
+  spanInsetPx: 4,
+  /** Tight band centered on the falls foot — not below into the pool. */
+  spawnBandHalfH: 10,
+  frequency: 42,
+  quantity: 1,
+  lifespanMin: 1400,
+  lifespanMax: 2800,
+  riseSpeedMin: -52,
+  riseSpeedMax: -22,
+  driftX: 10,
+  scaleStart: 0.28,
+  scaleEnd: 0.04,
+  alphaStart: 0.34,
+  alphaEnd: 0,
+} as const;
+
+/** Upward spray bursts at the bottom of the falls (pool impact). */
+export const POOL_SPRAY = {
+  depth: STAGE.depthFallsBaseFx + 0.35,
+  /** Fine-tune Y after mask resolve (negative = higher on screen). */
+  yOffsetPx: -2,
+  spanInsetPx: 4,
+  /** Full-width ambient churn across the falls bottom. */
+  ambientFrequency: 4,
+  ambientQuantity: 4,
+  /** Point emitters for wave peaks (count). */
+  burstEmitterCount: 14,
+  burstInsetPx: 8,
+  waveIntervalMinMs: 280,
+  waveIntervalMaxMs: 720,
+  waveStaggerMs: 35,
+  /** RTL wave layer starts this far after the LTR wave cycle begins. */
+  reverseWavePhaseMs: 380,
+  burstQuantityMin: 14,
+  burstQuantityMax: 28,
+  /** Random micro-bursts between waves. */
+  microBurstMinMs: 70,
+  microBurstMaxMs: 160,
+  microBurstQuantityMin: 4,
+  microBurstQuantityMax: 12,
+  emitHalfW: 10,
+  emitHalfH: 7,
+  lifespanMin: 240,
+  lifespanMax: 560,
+  speedMin: 60,
+  speedMax: 165,
+  angleMin: 245,
+  angleMax: 295,
+  gravityY: 34,
+  scaleStart: 0.34,
+  scaleEnd: 0.06,
+  alphaStart: 0.78,
+  alphaEnd: 0,
+} as const;
+
+/** Meandering foam drifting downstream from the falls foot into the river. */
+export const RIVER_FOAM = {
+  depth: STAGE.depthRiverFoam,
+  /** Spawn band below the resolved falls-base line. */
+  spawnBelowBasePx: 34,
+  spanInsetPx: 14,
+  emitterCount: 9,
+  emitHalfW: 18,
+  emitHalfH: 10,
+  frequency: 95,
+  quantity: 1,
+  lifespanMin: 3200,
+  lifespanMax: 7800,
+  speedMin: 12,
+  speedMax: 34,
+  angleMin: 76,
+  angleMax: 104,
+  /** Alternating emitters nudge left/right for a winding path. */
+  meanderAngleSpread: 7,
+  meanderAccel: 14,
+  gravityY: 6,
+  rotateMin: -28,
+  rotateMax: 28,
+  scaleStart: 0.12,
+  scaleEnd: 0.44,
+  alphaStart: 0.18,
+  alphaEnd: 0,
+  tint: 0xf6fbff,
+} as const;
+
+/** Lip-to-foot clip for vertical falls FX (excludes the open pool below). */
+export const FALLS_COLUMN_MASK = {
+  /** Nudge cutoff above the resolved falls-base line (negative = higher). */
+  baseGapPx: 4,
+} as const;
+
+/** Microbubble streaks sheeting down from the lip inside the falls. */
+export const FALLS_STREAK_BUBBLES = {
+  depth: STAGE.depthFallsColumnFx + 0.08,
+  lipInsetPx: 10,
+  emitterCount: 11,
+  frequency: 18,
+  quantity: 2,
+  lifespanMin: 1050,
+  lifespanMax: 2400,
+  speedMin: 34,
+  speedMax: 76,
+  angleMin: 84,
+  angleMax: 96,
+  gravityY: 190,
+  driftX: 6,
+  scaleStart: 0.52,
+  scaleEnd: 0.08,
+  alphaStart: 0.55,
+  alphaEnd: 0,
+} as const;

@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
 import {
+  BAD_TAP_STREAK_2_URL,
+  BAD_TAP_STREAK_3_URL,
   CHEERING_URL,
   COMBO_URL,
   CRACKING_EGG_URL,
+  DREAMWEED_URL,
   GAMEPLAY_BACKGROUND_LOOPS,
   GOLDEN_WAKE_URL,
   LEVEL_PASS_URL,
@@ -18,7 +21,7 @@ import {
   setSfxVolume as persistSfxVolume,
 } from '../storage/audioSettings';
 import { isMasterMuted, subscribeMasterMute } from '../storage/masterMute';
-import { COMBO } from '../config/gameConfig';
+import { BAD_TAP_STREAK, COMBO } from '../config/gameConfig';
 
 export type SoundId =
   | 'wake'
@@ -40,6 +43,7 @@ const WAKE_QUACK_PEAK_VOLUME = 0.62;
 const GOLDEN_WAKE_PEAK_VOLUME = 0.7;
 const COMBO_PEAK_VOLUME = 0.76;
 const MOONFLOWER_PEAK_VOLUME = 0.78;
+const DREAMWEED_PEAK_VOLUME = 0.78;
 const LIFE_PEAK_VOLUME = 0.76;
 const CRACKING_EGG_PEAK_VOLUME = 0.78;
 const LEVEL_PASS_PEAK_VOLUME = 0.78;
@@ -80,11 +84,14 @@ export class SoundManager {
   private readonly goldenWakeClip: HTMLAudioElement;
   private readonly comboClip: HTMLAudioElement;
   private readonly moonflowerClip: HTMLAudioElement;
+  private readonly dreamweedClip: HTMLAudioElement;
   private readonly lifeClip: HTMLAudioElement;
   private readonly crackingEggClip: HTMLAudioElement;
   private readonly levelPassClip: HTMLAudioElement;
   private readonly cheeringClip: HTMLAudioElement;
   private readonly woodClip: HTMLAudioElement;
+  private readonly badTapStreak2Clip: HTMLAudioElement;
+  private readonly badTapStreak3Clip: HTMLAudioElement;
   private lastWakeIndex = -1;
   private activeWakePlayback: HTMLAudioElement | null = null;
   private activeGoldenPlayback: HTMLAudioElement | null = null;
@@ -96,6 +103,8 @@ export class SoundManager {
   private backgroundUnlockHandlersAttached = false;
   /** Tab/app hidden, settings drawer, etc. */
   private playbackInterruptionCount = 0;
+  /** In-game settings drawer — idempotent (safe for rapid open/close). */
+  private settingsPaused = false;
   /** When false, scheduled gameplay SFX (combo stacks, etc.) are skipped. */
   private gameplaySfxActive = true;
   private scheduledSfxTimeouts: number[] = [];
@@ -125,6 +134,11 @@ export class SoundManager {
     this.moonflowerClip.loop = false;
     this.moonflowerClip.muted = muted;
 
+    this.dreamweedClip = new Audio(DREAMWEED_URL);
+    this.dreamweedClip.preload = 'auto';
+    this.dreamweedClip.loop = false;
+    this.dreamweedClip.muted = muted;
+
     this.lifeClip = new Audio(LIFE_URL);
     this.lifeClip.preload = 'auto';
     this.lifeClip.loop = false;
@@ -150,6 +164,16 @@ export class SoundManager {
     this.woodClip.loop = false;
     this.woodClip.muted = muted;
 
+    this.badTapStreak2Clip = new Audio(BAD_TAP_STREAK_2_URL);
+    this.badTapStreak2Clip.preload = 'auto';
+    this.badTapStreak2Clip.loop = false;
+    this.badTapStreak2Clip.muted = muted;
+
+    this.badTapStreak3Clip = new Audio(BAD_TAP_STREAK_3_URL);
+    this.badTapStreak3Clip.preload = 'auto';
+    this.badTapStreak3Clip.loop = false;
+    this.badTapStreak3Clip.muted = muted;
+
     for (const { url, peak } of GAMEPLAY_BACKGROUND_LOOPS) {
       const clip = new Audio(url);
       clip.preload = 'auto';
@@ -168,11 +192,14 @@ export class SoundManager {
     this.goldenWakeClip.muted = muted;
     this.comboClip.muted = muted;
     this.moonflowerClip.muted = muted;
+    this.dreamweedClip.muted = muted;
     this.lifeClip.muted = muted;
     this.crackingEggClip.muted = muted;
     this.levelPassClip.muted = muted;
     this.cheeringClip.muted = muted;
     this.woodClip.muted = muted;
+    this.badTapStreak2Clip.muted = muted;
+    this.badTapStreak3Clip.muted = muted;
     for (const { clip } of this.backgroundTracks) clip.muted = muted;
     if (this.activeWakePlayback) this.activeWakePlayback.muted = muted;
     if (this.activeGoldenPlayback) this.activeGoldenPlayback.muted = muted;
@@ -190,8 +217,45 @@ export class SoundManager {
   }
 
   private isPlaybackBlocked(): boolean {
+    if (this.settingsPaused) return true;
     if (this.playbackInterruptionCount > 0) return true;
     return typeof document !== 'undefined' && document.hidden;
+  }
+
+  /** Tap whiffs/buzzers — only block for settings or a hidden document. */
+  private isTapFeedbackBlocked(): boolean {
+    if (this.settingsPaused) return true;
+    return typeof document !== 'undefined' && document.hidden;
+  }
+
+  /**
+   * Clear stale lifecycle interruption stacking during an active tap.
+   * Blur/focus/page events can increment the counter without a matching resume.
+   */
+  reconcileTapFeedbackAudio(): void {
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (this.settingsPaused) return;
+    this.playbackInterruptionCount = 0;
+    this.tryUnlock();
+  }
+
+  pauseForSettings(): void {
+    if (this.settingsPaused) return;
+    this.settingsPaused = true;
+    this.stopWakeClips();
+    this.pauseGameplayBackground();
+    if (this.ctx && this.ctx.state !== 'closed') {
+      void this.ctx.suspend();
+    }
+  }
+
+  resumeFromSettings(): void {
+    if (!this.settingsPaused) return;
+    this.settingsPaused = false;
+    if (!this.isPlaybackBlocked()) {
+      void this.resumeContext();
+      this.resumeGameplayBackground();
+    }
   }
 
   pauseForInterruption(): void {
@@ -211,6 +275,18 @@ export class SoundManager {
     if (this.playbackInterruptionCount === 0 && !this.isPlaybackBlocked()) {
       void this.resumeContext();
       this.resumeGameplayBackground();
+    }
+  }
+
+  /** Force-reset interruption stacking (e.g. settings closed without onClose). */
+  forceResumePlayback(): void {
+    this.settingsPaused = false;
+    this.playbackInterruptionCount = 0;
+    if (!this.isPlaybackBlocked()) {
+      void this.resumeContext();
+      if (this.backgroundActive) {
+        this.resumeGameplayBackground();
+      }
     }
   }
 
@@ -276,16 +352,29 @@ export class SoundManager {
     if (this.moonflowerClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       this.moonflowerClip.load();
     }
+    if (this.dreamweedClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.dreamweedClip.load();
+    }
     if (this.lifeClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       this.lifeClip.load();
     }
     if (this.crackingEggClip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
       this.crackingEggClip.load();
     }
+    if (this.badTapStreak2Clip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.badTapStreak2Clip.load();
+    }
+    if (this.badTapStreak3Clip.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      this.badTapStreak3Clip.load();
+    }
   }
 
   private resumeContext(): AudioContext | null {
     if (!this.sfxEnabled) return null;
+
+    if (this.ctx?.state === 'closed') {
+      this.ctx = null;
+    }
 
     if (!this.ctx) {
       try {
@@ -303,102 +392,143 @@ export class SoundManager {
   }
 
   /** Harsh on/off buzzer for tapping a duck before it is saveable. */
-  private playTooEarlyBuzzer(): void {
-    const ctx = this.resumeContext();
-    if (!ctx) return;
+  private runTooEarlyBuzzer(ctx: AudioContext): void {
+    const t0 = ctx.currentTime;
+    const duration = 0.34;
+    const peak = this.scaledGain(0.13);
 
-    const run = () => {
-      const t0 = ctx.currentTime;
-      const duration = 0.34;
-      const peak = this.scaledGain(0.13);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = 262;
 
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'square';
-      osc.frequency.value = 262;
-
-      gain.gain.setValueAtTime(0, t0);
-      const flutterHz = 16;
-      const steps = Math.floor(duration * flutterHz);
-      for (let i = 0; i < steps; i++) {
-        const step = t0 + i / flutterHz;
-        gain.gain.setValueAtTime(i % 2 === 0 ? peak : peak * 0.35, step);
-      }
-      gain.gain.setValueAtTime(peak * 0.2, t0 + duration - 0.04);
-      gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t0);
-      osc.stop(t0 + duration + 0.02);
-    };
-
-    if (ctx.state === 'running') {
-      run();
-      return;
+    gain.gain.setValueAtTime(0, t0);
+    const flutterHz = 16;
+    const steps = Math.floor(duration * flutterHz);
+    for (let i = 0; i < steps; i++) {
+      const step = t0 + i / flutterHz;
+      gain.gain.setValueAtTime(i % 2 === 0 ? peak : peak * 0.35, step);
     }
-    void ctx.resume().then(() => {
-      if (ctx.state === 'running') run();
-    });
+    gain.gain.setValueAtTime(peak * 0.2, t0 + duration - 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.02);
   }
 
   /** Missed tap — airy whiff with a soft sploosh (empty space, decoy, etc.). */
-  private playBadTapWhiff(): void {
+  private runBadTapWhiff(ctx: AudioContext): void {
+    const t0 = ctx.currentTime;
+    const dur = 0.17;
+    const peak = this.scaledGain(0.15);
+
+    const sampleCount = Math.floor(ctx.sampleRate * dur);
+    const buffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate);
+    const samples = buffer.getChannelData(0);
+    for (let i = 0; i < sampleCount; i++) {
+      const env = 1 - i / sampleCount;
+      samples[i] = (Math.random() * 2 - 1) * env * env;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.setValueAtTime(1400, t0);
+    bandpass.frequency.exponentialRampToValueAtTime(320, t0 + dur);
+    bandpass.Q.value = 0.55;
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(peak, t0);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t0 + dur + 0.02);
+
+    noise.connect(bandpass);
+    bandpass.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+    noise.start(t0);
+    noise.stop(t0 + dur + 0.03);
+
+    const thump = ctx.createOscillator();
+    const thumpGain = ctx.createGain();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(200, t0);
+    thump.frequency.exponentialRampToValueAtTime(55, t0 + 0.11);
+    thumpGain.gain.setValueAtTime(peak * 0.4, t0);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.13);
+    thump.connect(thumpGain);
+    thumpGain.connect(ctx.destination);
+    thump.start(t0);
+    thump.stop(t0 + 0.14);
+  }
+
+  /** Resume Web Audio during the user-gesture chain (tap feedback). */
+  private async ensureContextReady(): Promise<AudioContext | null> {
+    if (!this.sfxEnabled) return null;
     const ctx = this.resumeContext();
-    if (!ctx) return;
-
-    const run = () => {
-      const t0 = ctx.currentTime;
-      const dur = 0.17;
-      const peak = this.scaledGain(0.15);
-
-      const sampleCount = Math.floor(ctx.sampleRate * dur);
-      const buffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate);
-      const samples = buffer.getChannelData(0);
-      for (let i = 0; i < sampleCount; i++) {
-        const env = 1 - i / sampleCount;
-        samples[i] = (Math.random() * 2 - 1) * env * env;
+    if (!ctx) return null;
+    if (ctx.state === 'suspended') {
+      try {
+        await ctx.resume();
+      } catch {
+        return null;
       }
+    }
+    return ctx.state === 'running' ? ctx : null;
+  }
 
-      const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
+  private playTapFeedbackSound(kind: 'badTap' | 'earlyBuzzer'): void {
+    if (!this.sfxEnabled || this.isTapFeedbackBlocked()) return;
+    if (isMasterMuted()) return;
 
-      const bandpass = ctx.createBiquadFilter();
-      bandpass.type = 'bandpass';
-      bandpass.frequency.setValueAtTime(1400, t0);
-      bandpass.frequency.exponentialRampToValueAtTime(320, t0 + dur);
-      bandpass.Q.value = 0.55;
-
-      const noiseGain = ctx.createGain();
-      noiseGain.gain.setValueAtTime(peak, t0);
-      noiseGain.gain.exponentialRampToValueAtTime(0.001, t0 + dur + 0.02);
-
-      noise.connect(bandpass);
-      bandpass.connect(noiseGain);
-      noiseGain.connect(ctx.destination);
-      noise.start(t0);
-      noise.stop(t0 + dur + 0.03);
-
-      const thump = ctx.createOscillator();
-      const thumpGain = ctx.createGain();
-      thump.type = 'sine';
-      thump.frequency.setValueAtTime(200, t0);
-      thump.frequency.exponentialRampToValueAtTime(55, t0 + 0.11);
-      thumpGain.gain.setValueAtTime(peak * 0.4, t0);
-      thumpGain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.13);
-      thump.connect(thumpGain);
-      thumpGain.connect(ctx.destination);
-      thump.start(t0);
-      thump.stop(t0 + 0.14);
-    };
-
-    if (ctx.state === 'running') {
-      run();
+    this.reconcileTapFeedbackAudio();
+    const ctx = this.resumeContext();
+    if (ctx && ctx.state !== 'running') {
+      try {
+        ctx.resume();
+      } catch {
+        /* resume may fail outside a user gesture */
+      }
+    }
+    if (ctx?.state === 'running') {
+      if (kind === 'badTap') this.runBadTapWhiff(ctx);
+      else this.runTooEarlyBuzzer(ctx);
       return;
     }
-    void ctx.resume().then(() => {
-      if (ctx.state === 'running') run();
-    });
+
+    void (async () => {
+      const ready = await this.ensureContextReady();
+      if (!ready || this.isTapFeedbackBlocked()) return;
+      if (kind === 'badTap') this.runBadTapWhiff(ready);
+      else this.runTooEarlyBuzzer(ready);
+    })();
+  }
+
+  /** Bad tap feedback — whiff on first miss, xx.mp3 at 2, xxx.mp3 at 3+. */
+  playBadTapStreak(streak: number): void {
+    if (!this.sfxEnabled || this.isTapFeedbackBlocked()) return;
+    if (isMasterMuted()) return;
+
+    this.reconcileTapFeedbackAudio();
+    this.tryUnlock();
+
+    if (streak >= BAD_TAP_STREAK.redAt) {
+      this.playGenericOneShot(
+        this.badTapStreak3Clip,
+        BAD_TAP_STREAK.streak3Volume,
+      );
+      return;
+    }
+    if (streak >= BAD_TAP_STREAK.orangeAt) {
+      this.playGenericOneShot(
+        this.badTapStreak2Clip,
+        BAD_TAP_STREAK.streak2Volume,
+      );
+      return;
+    }
+    this.playTapFeedbackSound('badTap');
   }
 
   /** Combo meter start or milestone — stacked combo.mp3 layers at milestones. */
@@ -439,6 +569,15 @@ export class SoundManager {
     if (isMasterMuted()) return;
     this.tryUnlock();
     this.playGenericOneShot(this.moonflowerClip, MOONFLOWER_PEAK_VOLUME);
+  }
+
+  /** Dreamweed swiped and collected. */
+  playDreamweedCollect(): void {
+    if (!this.sfxEnabled || !this.gameplaySfxActive || this.isPlaybackBlocked()) return;
+    if (isMasterMuted()) return;
+    this.reconcileTapFeedbackAudio();
+    this.tryUnlock();
+    this.playGenericOneShot(this.dreamweedClip, DREAMWEED_PEAK_VOLUME);
   }
 
   /** Balloon pop or golden egg — player gained a heart. */
@@ -732,25 +871,34 @@ export class SoundManager {
     this.activeOneShots = [];
   }
 
-  /** Cut off gameplay SFX (combo layers, quacks, ambient loops) when a run ends. */
-  stopAllGameplaySfx(): void {
-    this.gameplaySfxActive = false;
+  /** Stop playing clips without disabling future gameplay SFX. */
+  private stopActiveGameplayAudio(): void {
     this.clearScheduledSfx();
     this.stopWakeClips();
     this.stopActiveOneShots();
     this.stopGameplayBackground();
-    if (this.ctx && this.ctx.state === 'running') {
-      void this.ctx.suspend().then(() => {
-        if (this.ctx && this.ctx.state === 'suspended') {
-          void this.ctx.resume();
-        }
-      });
-    }
+  }
+
+  /** Cut off gameplay SFX (combo layers, quacks, ambient loops) when a run ends. */
+  stopAllGameplaySfx(): void {
+    this.gameplaySfxActive = false;
+    this.stopActiveGameplayAudio();
   }
 
   /** Re-enable gameplay one-shots at the start of a new run. */
   resumeGameplaySfx(): void {
     this.gameplaySfxActive = true;
+    if (this.ctx?.state === 'closed') {
+      this.ctx = null;
+    }
+    this.forceResumePlayback();
+    this.tryUnlock();
+  }
+
+  /** Scene transition — stop clips and reset interruption state, keep SFX armed for next run. */
+  detach(): void {
+    this.stopActiveGameplayAudio();
+    this.clearPlaybackInterruptions();
   }
 
   private playWakeQuack(): void {
@@ -762,8 +910,16 @@ export class SoundManager {
   }
 
   play(id: SoundId): void {
-    if (!this.sfxEnabled || this.isPlaybackBlocked()) return;
+    if (!this.sfxEnabled) return;
     if (isMasterMuted()) return;
+
+    const isTapFeedback = id === 'badTap' || id === 'earlyBuzzer';
+    if (isTapFeedback) {
+      if (this.isTapFeedbackBlocked()) return;
+      this.reconcileTapFeedbackAudio();
+    } else if (this.isPlaybackBlocked()) {
+      return;
+    }
 
     this.tryUnlock();
 
@@ -796,12 +952,10 @@ export class SoundManager {
         this.beep(140, 0.22, 'sawtooth', 0.12);
         break;
       case 'badTap':
-        if (!this.gameplaySfxActive) return;
-        this.playBadTapWhiff();
+        this.playTapFeedbackSound('badTap');
         break;
       case 'earlyBuzzer':
-        if (!this.gameplaySfxActive) return;
-        this.playTooEarlyBuzzer();
+        this.playTapFeedbackSound('earlyBuzzer');
         break;
       case 'bonus':
         if (!this.gameplaySfxActive) return;
@@ -942,14 +1096,18 @@ export class SoundManager {
   }
 
   clearPlaybackInterruptions(): void {
+    const wasInterrupted = this.playbackInterruptionCount > 0;
+    this.settingsPaused = false;
     this.playbackInterruptionCount = 0;
     if (typeof document !== 'undefined' && document.hidden) {
       this.pauseForInterruption();
+      return;
     }
-  }
-
-  detach(): void {
-    this.stopAllGameplaySfx();
-    this.clearPlaybackInterruptions();
+    if (wasInterrupted) {
+      void this.resumeContext();
+      if (this.backgroundActive) {
+        this.resumeGameplayBackground();
+      }
+    }
   }
 }

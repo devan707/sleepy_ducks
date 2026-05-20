@@ -1,22 +1,248 @@
 import Phaser from 'phaser';
 import { ASSET_KEYS } from '../config/assets';
-import { GAME_HEIGHT, GAME_WIDTH, STAGE } from '../config/gameConfig';
+import {
+  FALLS_BASE_MIST,
+  FALLS_STREAK_BUBBLES,
+  ROCK_OBSTACLES,
+  STAGE,
+} from '../config/gameConfig';
+import {
+  resolveFallsPoolSprayLine,
+} from '../objects/EnvironmentLayout';
 
-/** Pool mist at bottom only — not in the fall column. */
+export const SPRAY_BUBBLE_KEY = 'fx-spray-bubble';
+export const POOL_SPRAY_BUBBLE_KEY = 'fx-pool-spray-bubble';
+export const FALLS_STREAK_BUBBLE_KEY = 'fx-falls-streak-bubble';
+export const RIVER_FOAM_KEY = 'fx-river-foam';
+
+export type RockSprayAnchor = {
+  x: number;
+  hitTopY: number;
+  hitBottomY: number;
+  hitRadiusX: number;
+};
+
+/** Soft white dot for cascade spray — generated once per scene. */
+export function ensureSprayBubbleTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(SPRAY_BUBBLE_KEY)) return;
+
+  const size = 14;
+  const g = scene.make.graphics({ x: 0, y: 0 }, false);
+  g.fillStyle(0xffffff, 0.4);
+  g.fillCircle(size / 2, size / 2, size * 0.44);
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(size / 2, size / 2, size * 0.16);
+  g.generateTexture(SPRAY_BUBBLE_KEY, size, size);
+  g.destroy();
+}
+
+/** Slightly larger soft dot for pool-base spray waves. */
+export function ensurePoolSprayBubbleTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(POOL_SPRAY_BUBBLE_KEY)) return;
+
+  const size = 18;
+  const g = scene.make.graphics({ x: 0, y: 0 }, false);
+  g.fillStyle(0xffffff, 0.32);
+  g.fillCircle(size / 2, size / 2, size * 0.46);
+  g.fillStyle(0xffffff, 0.65);
+  g.fillCircle(size / 2, size / 2, size * 0.26);
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(size / 2, size / 2, size * 0.14);
+  g.generateTexture(POOL_SPRAY_BUBBLE_KEY, size, size);
+  g.destroy();
+}
+
+/** Vertical micro-streak for lip-to-base bubble sheets. */
+export function ensureFallsStreakBubbleTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(FALLS_STREAK_BUBBLE_KEY)) return;
+
+  const w = 6;
+  const h = 18;
+  const g = scene.make.graphics({ x: 0, y: 0 }, false);
+  g.fillStyle(0xffffff, 0.35);
+  g.fillEllipse(w / 2, h / 2, w * 0.9, h * 0.92);
+  g.fillStyle(0xffffff, 0.85);
+  g.fillEllipse(w / 2, h / 2, w * 0.45, h * 0.55);
+  g.generateTexture(FALLS_STREAK_BUBBLE_KEY, w, h);
+  g.destroy();
+}
+
+/** Soft lumpy patch for downstream river foam. */
+export function ensureRiverFoamTexture(scene: Phaser.Scene): void {
+  if (scene.textures.exists(RIVER_FOAM_KEY)) return;
+
+  const w = 28;
+  const h = 20;
+  const g = scene.make.graphics({ x: 0, y: 0 }, false);
+  g.fillStyle(0xffffff, 0.28);
+  g.fillEllipse(w * 0.48, h * 0.52, w * 0.88, h * 0.78);
+  g.fillStyle(0xffffff, 0.55);
+  g.fillEllipse(w * 0.38, h * 0.42, w * 0.52, h * 0.48);
+  g.fillStyle(0xffffff, 0.9);
+  g.fillEllipse(w * 0.58, h * 0.38, w * 0.28, h * 0.24);
+  g.generateTexture(RIVER_FOAM_KEY, w, h);
+  g.destroy();
+}
+
+/** Single lip/rock streak emitter — shared particle tuning. */
+export function createFallsStreakEmitter(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  depth = FALLS_STREAK_BUBBLES.depth,
+  scaleMul = 1,
+): Phaser.GameObjects.Particles.ParticleEmitter {
+  ensureFallsStreakBubbleTexture(scene);
+  const cfg = FALLS_STREAK_BUBBLES;
+
+  const emitter = scene.add.particles(x, y, FALLS_STREAK_BUBBLE_KEY, {
+    x: { min: -cfg.driftX, max: cfg.driftX },
+    y: { min: -2, max: 4 },
+    lifespan: { min: cfg.lifespanMin, max: cfg.lifespanMax },
+    speed: { min: cfg.speedMin, max: cfg.speedMax },
+    angle: { min: cfg.angleMin, max: cfg.angleMax },
+    gravityY: cfg.gravityY,
+    scale: { start: cfg.scaleStart * scaleMul, end: cfg.scaleEnd * scaleMul },
+    alpha: { start: cfg.alphaStart, end: cfg.alphaEnd },
+    frequency: cfg.frequency,
+    quantity: cfg.quantity,
+    tint: 0xf6fbff,
+    blendMode: Phaser.BlendModes.ADD,
+    emitting: true,
+  });
+  emitter.setDepth(depth);
+  emitter.setScrollFactor(0);
+  return emitter;
+}
+
+function createFlankSprayEmitter(
+  scene: Phaser.Scene,
+  x: number,
+  y: number,
+  angleMin: number,
+  angleMax: number,
+): Phaser.GameObjects.Particles.ParticleEmitter {
+  const cfg = ROCK_OBSTACLES.spray;
+
+  const emitter = scene.add.particles(x, y, SPRAY_BUBBLE_KEY, {
+    x: { min: -cfg.emitHalfW, max: cfg.emitHalfW },
+    y: { min: -cfg.emitHalfH, max: cfg.emitHalfH },
+    lifespan: { min: cfg.lifespanMin, max: cfg.lifespanMax },
+    speed: { min: cfg.speedMin, max: cfg.speedMax },
+    angle: { min: angleMin, max: angleMax },
+    gravityY: cfg.gravityY,
+    scale: { start: cfg.scaleStart, end: cfg.scaleEnd },
+    alpha: { start: cfg.alphaStart, end: cfg.alphaEnd },
+    frequency: cfg.frequency,
+    quantity: cfg.quantity,
+    tint: 0xf4faff,
+    blendMode: Phaser.BlendModes.ADD,
+    emitting: true,
+  });
+  emitter.setDepth(cfg.depth);
+  emitter.setScrollFactor(0);
+  return emitter;
+}
+
+/** Side spray — one emitter on each rock flank where water deflects outward. */
+export function createRockSprayEmitters(
+  scene: Phaser.Scene,
+  rocks: readonly RockSprayAnchor[],
+): Phaser.GameObjects.Particles.ParticleEmitter[] {
+  ensureSprayBubbleTexture(scene);
+  const cfg = ROCK_OBSTACLES.spray;
+  const emitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
+
+  for (const rock of rocks) {
+    const midY = (rock.hitTopY + rock.hitBottomY) * 0.5;
+    const flankX = rock.hitRadiusX * cfg.flankOffsetFrac;
+
+    emitters.push(
+      createFlankSprayEmitter(
+        scene,
+        rock.x - flankX,
+        midY,
+        cfg.leftAngleMin,
+        cfg.leftAngleMax,
+      ),
+      createFlankSprayEmitter(
+        scene,
+        rock.x + flankX,
+        midY,
+        cfg.rightAngleMin,
+        cfg.rightAngleMax,
+      ),
+    );
+  }
+
+  return emitters;
+}
+
+/** Lip-style streak sheets below each rock foot. */
+export function createRockStreakEmitters(
+  scene: Phaser.Scene,
+  rocks: readonly RockSprayAnchor[],
+): Phaser.GameObjects.Particles.ParticleEmitter[] {
+  const placement = ROCK_OBSTACLES.streak;
+  const emitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
+
+  for (const rock of rocks) {
+    const spawnY = rock.hitBottomY + placement.spawnBelowHitBottomPx;
+    const halfW = rock.hitRadiusX * placement.spanRadiusFrac;
+    const inset = rock.hitRadiusX * placement.spanInsetFrac;
+    const lo = rock.x - halfW + inset;
+    const hi = rock.x + halfW - inset;
+    const count = placement.emittersPerRock;
+
+    for (let i = 0; i < count; i++) {
+      const t = count > 1 ? i / (count - 1) : 0.5;
+      emitters.push(
+        createFallsStreakEmitter(
+          scene,
+          lo + t * (hi - lo),
+          spawnY,
+          placement.depth,
+          placement.scaleMul,
+        ),
+      );
+    }
+  }
+
+  return emitters;
+}
+
+/** Larger bubbles rising from the falls base — mask-aligned, behind left cliff. */
+export function createFallsBaseMistEmitter(
+  scene: Phaser.Scene,
+): Phaser.GameObjects.Particles.ParticleEmitter {
+  const line = resolveFallsPoolSprayLine(scene);
+  const cfg = FALLS_BASE_MIST;
+  const anchorY = line.y + cfg.yOffsetPx;
+  const zoneW = Math.max(20, line.width - cfg.spanInsetPx * 2);
+
+  const emitter = scene.add.particles(line.centerX, anchorY, ASSET_KEYS.fxMist, {
+    x: { min: -zoneW * 0.5, max: zoneW * 0.5 },
+    y: { min: -cfg.spawnBandHalfH, max: cfg.spawnBandHalfH },
+    lifespan: { min: cfg.lifespanMin, max: cfg.lifespanMax },
+    speedY: { min: cfg.riseSpeedMin, max: cfg.riseSpeedMax },
+    speedX: { min: -cfg.driftX, max: cfg.driftX },
+    scale: { start: cfg.scaleStart, end: cfg.scaleEnd },
+    alpha: { start: cfg.alphaStart, end: cfg.alphaEnd },
+    frequency: cfg.frequency,
+    quantity: cfg.quantity,
+    blendMode: Phaser.BlendModes.ADD,
+    emitting: true,
+  });
+  emitter.setDepth(cfg.depth);
+  emitter.setScrollFactor(0);
+  return emitter;
+}
+
+/** @deprecated Use createFallsBaseMistEmitter */
 export function createMistEmitter(
   scene: Phaser.Scene,
 ): Phaser.GameObjects.Particles.ParticleEmitter {
-  return scene.add.particles(0, 0, ASSET_KEYS.fxMist, {
-    x: { min: 40, max: GAME_WIDTH - 40 },
-    y: { min: STAGE.mistZoneTop, max: GAME_HEIGHT - 40 },
-    lifespan: { min: 2000, max: 4200 },
-    speedY: { min: -18, max: -6 },
-    speedX: { min: -12, max: 12 },
-    scale: { start: 0.35, end: 0.05 },
-    alpha: { start: 0.35, end: 0 },
-    frequency: 180,
-    blendMode: Phaser.BlendModes.ADD,
-  });
+  return createFallsBaseMistEmitter(scene);
 }
 
 export function burstComboCelebration(

@@ -9,6 +9,10 @@ export type GameplayBottomToastOptions = {
   imageKey?: string;
   imageFrame?: string;
   imageHeight?: number;
+  fontSize?: string;
+  panelHeight?: number;
+  panelMinWidth?: number;
+  panelMarginX?: number;
   /** Override visible hold time after fade-in (ms). */
   holdMs?: number;
   onComplete?: () => void;
@@ -34,6 +38,10 @@ export class GameplayBottomToast {
       imageKey,
       imageFrame,
       imageHeight = GAMEPLAY_TOAST.imageSize,
+      fontSize = GAMEPLAY_TOAST.fontSize,
+      panelHeight = GAMEPLAY_TOAST.panelHeight,
+      panelMinWidth = GAMEPLAY_TOAST.panelMinWidth,
+      panelMarginX = GAMEPLAY_TOAST.panelMarginX,
       holdMs = GAMEPLAY_TOAST.holdMs,
       onComplete,
     } = opts;
@@ -46,21 +54,26 @@ export class GameplayBottomToast {
     const root = this.scene.add.container(0, 0);
     root.setDepth(STAGE.depthGameplayToast).setScrollFactor(0).setAlpha(0);
 
+    const maxPanelW = GAME_WIDTH - panelMarginX * 2;
+    const iconSize = imageKey ? imageHeight : 0;
+    const iconGap = iconSize > 0 ? GAMEPLAY_TOAST.imageGap : 0;
+    const maxTextW = maxPanelW - GAMEPLAY_TOAST.panelPadX * 2 - iconSize - iconGap;
+
     const label = this.scene.add
       .text(0, 0, text, captionTextStyle({
-        fontSize: GAMEPLAY_TOAST.fontSize,
+        fontSize,
         color: '#ecf8ff',
         align: 'center',
         strokeThickness: 3,
-        wordWrap: { width: GAME_WIDTH - 56, useAdvancedWrap: true },
+        wordWrap: { width: maxTextW, useAdvancedWrap: true },
       }))
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5, 0.5);
 
     let icon: Phaser.GameObjects.Sprite | null = null;
     if (imageKey && this.scene.textures.exists(imageKey)) {
-      icon = this.scene.add.sprite(0, cy, imageKey, imageFrame);
+      icon = this.scene.add.sprite(0, 0, imageKey, imageFrame);
       const frame = icon.frame;
-      const fit = imageHeight / frame.height;
+      const fit = iconSize / frame.height;
       icon.setDisplaySize(frame.width * fit, frame.height * fit);
       icon.setOrigin(0.5);
       if (
@@ -71,25 +84,27 @@ export class GameplayBottomToast {
       }
     }
 
-    const iconW = icon ? imageHeight + GAMEPLAY_TOAST.imageGap : 0;
-    const contentW = iconW + label.width;
-    const panelW = Math.max(GAMEPLAY_TOAST.panelMinWidth, contentW + GAMEPLAY_TOAST.panelPadX * 2);
-    const panelH = GAMEPLAY_TOAST.panelHeight;
+    const textW = label.width;
+    const contentW = iconSize + iconGap + textW;
+    const panelW = Phaser.Math.Clamp(
+      contentW + GAMEPLAY_TOAST.panelPadX * 2,
+      panelMinWidth,
+      maxPanelW,
+    );
     const panelLeft = cx - panelW / 2;
     const panelRadius = GAMEPLAY_TOAST.panelRadius;
 
     const panel = this.scene.add.graphics();
     panel.fillStyle(0x0a1824, GAMEPLAY_TOAST.panelAlpha);
-    panel.fillRoundedRect(panelLeft, cy - panelH / 2, panelW, panelH, panelRadius);
+    panel.fillRoundedRect(panelLeft, cy - panelHeight / 2, panelW, panelHeight, panelRadius);
     panel.lineStyle(2, 0xffffff, 0.28);
-    panel.strokeRoundedRect(panelLeft, cy - panelH / 2, panelW, panelH, panelRadius);
+    panel.strokeRoundedRect(panelLeft, cy - panelHeight / 2, panelW, panelHeight, panelRadius);
 
-    const contentLeft = panelLeft + (panelW - contentW) / 2;
+    const contentStartX = cx - contentW / 2;
     if (icon) {
-      icon.setPosition(contentLeft + imageHeight / 2, cy);
-      label.setPosition(contentLeft + iconW, cy);
+      icon.setPosition(contentStartX + iconSize / 2, cy);
+      label.setPosition(contentStartX + iconSize + iconGap + textW / 2, cy);
     } else {
-      label.setOrigin(0.5, 0.5);
       label.setPosition(cx, cy);
     }
 

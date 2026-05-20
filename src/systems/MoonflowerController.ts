@@ -4,25 +4,18 @@ import { GameEvents } from '../core/GameEvents';
 import { MOONFLOWER } from '../config/gameConfig';
 import { Moonflower, MoonflowerTapSuppress } from '../objects/Moonflower';
 import type { WaterfallStage } from '../objects/WaterfallStage';
-import { MoonflowerCollectToast } from '../ui/MoonflowerCollectToast';
-import type { GameplayBottomToast } from '../ui/GameplayBottomToast';
+import { recordCharmCollect } from '../storage/charms';
 
 /** Night collectible — one sprout sequence per run, scheduled from the HUD clock. */
 export class MoonflowerController {
   private scene: Phaser.Scene;
   private moonflower: Moonflower | null = null;
-  private toast: MoonflowerCollectToast;
   private spawnedThisRun = false;
   private collectedThisRun = false;
   private enabled = true;
 
-  constructor(
-    scene: Phaser.Scene,
-    _stage: WaterfallStage,
-    bottomToast: GameplayBottomToast,
-  ) {
+  constructor(scene: Phaser.Scene, _stage: WaterfallStage) {
     this.scene = scene;
-    this.toast = new MoonflowerCollectToast(bottomToast);
 
     scene.events.on(GameEvents.GAME_OVER, this.onGameOver, this);
   }
@@ -57,6 +50,11 @@ export class MoonflowerController {
     return true;
   }
 
+  containsWorldPoint(worldX: number, worldY: number): boolean {
+    if (this.collectedThisRun || !this.moonflower?.active) return false;
+    return this.moonflower.containsWorldPoint(worldX, worldY);
+  }
+
   destroy(): void {
     this.scene.events.off(GameEvents.GAME_OVER, this.onGameOver, this);
     this.moonflower?.destroy();
@@ -79,7 +77,7 @@ export class MoonflowerController {
     this.moonflower.destroy();
     this.moonflower = null;
 
-    this.toast.show();
+    recordCharmCollect('moonflower', 0);
     this.scene.events.emit(GameEvents.CHARM_COLLECTED, {
       id: 'moonflower',
       x: fromX,

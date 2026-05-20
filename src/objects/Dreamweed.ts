@@ -3,13 +3,11 @@ import {
   DREAMWEED_ANIM_KEYS,
   DREAMWEED_ATLAS_KEYS,
 } from '../config/dreamweedAssets';
-import { DREAMWEED, STAGE, type RockObstacleId } from '../config/gameConfig';
+import { DREAMWEED, STAGE } from '../config/gameConfig';
 import { getCrestApproachPosition, getLipYGame } from './EnvironmentLayout';
-import type { RockObstacleBounds } from './WaterfallRocks';
 import type { StageLayout, WaterfallStage } from './WaterfallStage';
 
 type DreamweedMotionPhase = 'cresting' | 'falling';
-type DreamweedFallPhase = 'free' | 'rockSnag';
 
 /** Prevents gameplay taps from passing through dreamweed grab/swipe. */
 export class DreamweedGrabSuppress {
@@ -23,6 +21,10 @@ export class DreamweedGrabSuppress {
     if (!DreamweedGrabSuppress.active) return false;
     DreamweedGrabSuppress.active = false;
     return true;
+  }
+
+  static reset(): void {
+    DreamweedGrabSuppress.active = false;
   }
 }
 
@@ -44,10 +46,8 @@ export class Dreamweed extends Phaser.GameObjects.Container {
   private fallSpin = 0;
   private fallRotation = 0;
   private grabbed = false;
-  private fallPhase: DreamweedFallPhase = 'free';
-  private slideVelocityX = 0;
-  private snagRockId: RockObstacleId | null = null;
-  private clearedRockIds = new Set<RockObstacleId>();
+  private rockSnagMs = 0;
+  private rockSnagBypassUntilMs = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -101,22 +101,40 @@ export class Dreamweed extends Phaser.GameObjects.Container {
     return this.grabbed;
   }
 
+  /** True while dreamweed is slowed on a cascade rock (easier swipe target). */
+  isRockSnagged(): boolean {
+    return (
+      this.active &&
+      this.motionPhase === 'falling' &&
+      this.isPastLip() &&
+      this.rockSnagMs > 0
+    );
+  }
+
   containsWorldPoint(worldX: number, worldY: number): boolean {
     if (!this.active || !this.visible || this.motionPhase !== 'falling') return false;
-    const left = this.x - this.hitW * 0.5;
-    const top = this.y - this.hitH;
-    return (
-      worldX >= left &&
-      worldX <= left + this.hitW &&
-      worldY >= top &&
-      worldY <= this.y
-    );
+    return this.isNearWorldPoint(worldX, worldY, this.getHitPad());
+  }
+
+  /** Looser proximity test for swipe-to-collect on rock-snagged weed. */
+  isNearWorldPoint(worldX: number, worldY: number, pad = this.getHitPad()): boolean {
+    const w = this.hitW * pad;
+    const h = this.hitH * pad;
+    const cx = this.x;
+    const cy = this.y - h * 0.5;
+    const dx = worldX - cx;
+    const dy = worldY - cy;
+    const r = Math.max(w, h) * 0.55;
+    return dx * dx + dy * dy <= r * r;
+  }
+
+  private getHitPad(): number {
+    return this.isRockSnagged() ? DREAMWEED.rockSnagHitPad : 1;
   }
 
   tryBeginGrab(): boolean {
     if (!this.active || this.grabbed || this.motionPhase !== 'falling') return false;
     this.grabbed = true;
-    DreamweedGrabSuppress.arm();
     return true;
   }
 
@@ -139,7 +157,7 @@ export class Dreamweed extends Phaser.GameObjects.Container {
   }
 
   isOffScreen(): boolean {
-    return this.y > DREAMWEED.despawnBelowY;
+    return this.y > this.layout.mistZoneTop;
   }
 
   private updateCresting(deltaMs: number): void {
@@ -158,90 +176,59 @@ export class Dreamweed extends Phaser.GameObjects.Container {
   }
 
   private updateFalling(deltaMs: number): void {
-    const dt = deltaMs / 1000;
-
-    if (this.fallPhase === 'rockSnag') {
-      this.updateRockSnag(dt, deltaMs);
+    if (this.grabbed) {
+      this.fallVelocity = 0;
+      this.applyFallVisuals();
+      this.applyPoolPhase();
       return;
     }
 
-    this.fallVelocity = Math.min(
-      DREAMWEED.maxFallVelocity,
-      this.fallVelocity + DREAMWEED.fallGravityAccel * dt,
-    );
+    const dt = deltaMs / 1000;
     const prevY = this.y;
-    this.y += this.fallVelocity * dt;
+    const now = this.scene.time.now;
+    let overRock =
+      now >= this.rockSnagBypassUntilMs && this.isOverRock(prevY, dt);
 
-    if (!this.grabbed) {
-      const rock = this.checkRockHit(prevY);
-      if (rock && !this.clearedRockIds.has(rock.id)) {
-        this.beginRockSnag(rock);
-        this.applyFallVisuals();
-        this.applyPoolPhase();
-        return;
+    if (overRock) {
+      this.rockSnagMs += deltaMs;
+      if (this.rockSnagMs >= DREAMWEED.rockMaxSnagMs) {
+        this.rockSnagMs = 0;
+        this.rockSnagBypassUntilMs = now + DREAMWEED.rockSnagBypassMs;
+        this.fallVelocity = Math.max(this.fallVelocity, DREAMWEED.rockSlideOffSpeed);
+      } else {
+        this.fallVelocity = Phaser.Math.Linear(
+          this.fallVelocity,
+          DREAMWEED.rockSlowFallSpeed,
+          Math.min(1, dt * 14),
+        );
       }
+    } else {
+      this.rockSnagMs = 0;
+      this.fallVelocity = Math.min(
+        DREAMWEED.maxFallVelocity,
+        this.fallVelocity + DREAMWEED.fallGravityAccel * dt,
+      );
     }
+
+    this.y += this.fallVelocity * dt;
 
     this.applyFallVisuals();
     this.applyPoolPhase();
     this.applyFallRotation(deltaMs);
   }
 
-  private updateRockSnag(dt: number, deltaMs: number): void {
-    this.fallVelocity = Phaser.Math.Linear(
-      this.fallVelocity,
-      DREAMWEED.rockSnagFallSpeed,
-      Math.min(1, dt * 6),
+  private isOverRock(prevY: number, dt: number): boolean {
+    if (this.motionPhase !== 'falling' || !this.isPastLip()) return false;
+    const lead =
+      this.fallVelocity < 80
+        ? 8
+        : Math.min(this.fallVelocity * 0.025, 22);
+    const probeY = prevY + this.fallVelocity * dt;
+    return (
+      this.waterfallStage
+        .getRocks()
+        .hitTestSegment(this.x, prevY, probeY, lead) != null
     );
-    const prevY = this.y;
-    this.y += this.fallVelocity * dt;
-    this.x += this.slideVelocityX * dt;
-    this.x = Phaser.Math.Clamp(this.x, this.layout.laneMinX, this.layout.laneMaxX);
-
-    this.applyFallVisuals();
-    this.applyPoolPhase();
-
-    if (this.isPastLip()) {
-      const slideTilt =
-        Math.sign(this.slideVelocityX || 1) * DREAMWEED.rockSlideTiltDeg;
-      this.spinAngle += this.fallSpin * deltaMs * 0.35;
-      this.setRotation(this.fallRotation + this.spinAngle + slideTilt);
-    }
-
-    const rock = this.checkRockHit(prevY);
-    if (!rock || rock.id !== this.snagRockId) {
-      if (this.snagRockId) this.clearedRockIds.add(this.snagRockId);
-      this.fallPhase = 'free';
-      this.slideVelocityX = 0;
-      this.snagRockId = null;
-      this.fallVelocity = DREAMWEED.rockSnagFallSpeed;
-      this.applyFallRotation(deltaMs);
-    }
-  }
-
-  private beginRockSnag(rock: RockObstacleBounds): void {
-    this.fallPhase = 'rockSnag';
-    this.snagRockId = rock.id;
-    this.fallVelocity = Math.min(this.fallVelocity, DREAMWEED.rockSnagFallSpeed);
-
-    const dx = this.x - rock.x;
-    let slideDir: number;
-    if (Math.abs(dx) > 6) {
-      slideDir = dx >= 0 ? 1 : -1;
-    } else {
-      const roomLeft = this.x - this.layout.laneMinX;
-      const roomRight = this.layout.laneMaxX - this.x;
-      slideDir = roomRight >= roomLeft ? 1 : -1;
-    }
-    this.slideVelocityX = slideDir * DREAMWEED.rockSlideSpeed;
-  }
-
-  private checkRockHit(prevY = this.y): RockObstacleBounds | null {
-    if (this.motionPhase !== 'falling' || !this.isPastLip()) return null;
-    const lead = Math.min(this.fallVelocity * 0.025, 22);
-    return this.waterfallStage
-      .getRocks()
-      .hitTestSegment(this.x, prevY, this.y, lead);
   }
 
   private applyFallRotation(deltaMs: number): void {

@@ -95,7 +95,8 @@ export class HUD {
 
     const eggY = this.scoreTop + 8 + HEART_SIZE + EGG_BELOW_HEARTS + 14;
     const eggX = heartsRight - 10;
-    const moonflowerX = eggX - EGG_ICON_GAP - MOONFLOWER_EGG_GAP - MOONFLOWER_SLOT_OFFSET_X;
+    const moonflowerX =
+      eggX - EGG_ICON_GAP - MOONFLOWER_EGG_GAP - MOONFLOWER_SLOT_OFFSET_X - 15;
     const dreamweedX = (moonflowerX + eggX) / 2;
     this.moonflowerHudIcon = new MoonflowerHudIcon(scene, moonflowerX, eggY);
     this.dreamweedHudCounter = new DreamweedHudCounter(scene, dreamweedX, eggY);

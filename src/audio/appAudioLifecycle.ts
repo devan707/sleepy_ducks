@@ -29,6 +29,8 @@ function syncAppVisibility(game: Phaser.Game): void {
     return;
   }
 
+  game.scale.refresh();
+
   if (appHidden) {
     appHidden = false;
     game.loop.wake();
@@ -62,15 +64,30 @@ export function initAppAudioLifecycle(game: Phaser.Game): void {
   document.addEventListener('freeze', onLifecycleChange);
   document.addEventListener('resume', onLifecycleChange);
 
+  const onViewportChange = (): void => {
+    game.scale.refresh();
+    if (!document.hidden) {
+      game.loop.wake();
+    }
+  };
+  window.addEventListener('resize', onViewportChange);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', onViewportChange);
+    window.visualViewport.addEventListener('scroll', onViewportChange);
+  }
+
   // First interaction after a missed pageshow — unstick loop + audio.
   document.addEventListener(
     'pointerdown',
     () => {
       if (!document.hidden) {
+        game.scale.refresh();
         game.loop.wake();
         if (appHidden) {
           appHidden = false;
           resumeAllAudio();
+        } else {
+          SoundManager.getInstance().reconcileTapFeedbackAudio();
         }
       }
     },

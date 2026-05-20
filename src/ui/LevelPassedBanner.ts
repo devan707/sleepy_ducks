@@ -27,14 +27,20 @@ export type LevelPassedBannerOptions = {
   title: string;
   followUp?: string;
   animation?: BannerAnimation;
+  titleFontSizePx?: number;
+  titleColor?: string;
+  titleStroke?: string;
+  titleStrokeThickness?: number;
+  /** Override delay before fade-out (single-message celebration only). */
+  holdBeforeFadeMs?: number;
 };
 
-const titleStyle = () =>
+const celebrationTitleStyle = (options: LevelPassedBannerOptions) =>
   lilitaDisplayStyle({
-    fontSize: `${TITLE_FONT_SIZE_PX}px`,
-    color: '#fff4b8',
-    stroke: '#1a0e08',
-    strokeThickness: 7,
+    fontSize: `${options.titleFontSizePx ?? TITLE_FONT_SIZE_PX}px`,
+    color: options.titleColor ?? '#fff4b8',
+    stroke: options.titleStroke ?? '#1a0e08',
+    strokeThickness: options.titleStrokeThickness ?? 7,
   });
 
 const followUpStyle = () =>
@@ -91,8 +97,9 @@ export class LevelPassedBanner {
   private showCelebration(options: LevelPassedBannerOptions): void {
     this.destroyExisting();
 
+    const titleFontPx = options.titleFontSizePx ?? TITLE_FONT_SIZE_PX;
     const title = this.scene.add
-      .text(0, 0, options.title, titleStyle())
+      .text(0, 0, options.title, celebrationTitleStyle(options))
       .setOrigin(0.5, 0);
 
     const children: Phaser.GameObjects.GameObject[] = [title];
@@ -116,7 +123,7 @@ export class LevelPassedBanner {
       .setAlpha(0)
       .setScale(0.3);
 
-    void ensureLilitaFont(title, TITLE_FONT_SIZE_PX);
+    void ensureLilitaFont(title, titleFontPx);
 
     this.scene.tweens.add({
       targets: this.root,
@@ -129,10 +136,9 @@ export class LevelPassedBanner {
     });
 
     if (!followUp) {
-      this.holdTimer = this.scene.time.delayedCall(
-        TITLE_VISIBLE_MS + SINGLE_MESSAGE_HOLD_MS,
-        () => this.fadeAndDestroy(),
-      );
+      const holdMs =
+        options.holdBeforeFadeMs ?? TITLE_VISIBLE_MS + SINGLE_MESSAGE_HOLD_MS;
+      this.holdTimer = this.scene.time.delayedCall(holdMs, () => this.fadeAndDestroy());
       return;
     }
 

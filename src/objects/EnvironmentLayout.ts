@@ -7,6 +7,8 @@ import {
   GAME_WIDTH,
   SPAWN_LANE,
   STAGE,
+  RIVER_FOAM,
+  FALLS_COLUMN_MASK,
 } from '../config/gameConfig';
 import { isDevMode } from '../dev/isDevMode';
 
@@ -30,6 +32,9 @@ let lipEmergenceGraphics: Phaser.GameObjects.Graphics | null = null;
 let lipEmergenceMask: Phaser.Display.Masks.GeometryMask | null = null;
 let lipPoolGraphics: Phaser.GameObjects.Graphics | null = null;
 let lipPoolMask: Phaser.Display.Masks.GeometryMask | null = null;
+let fallsColumnGraphics: Phaser.GameObjects.Graphics | null = null;
+let fallsColumnMask: Phaser.Display.Masks.GeometryMask | null = null;
+let fallsColumnMaskScene: Phaser.Scene | null = null;
 
 /** Maps 780×1699 environment art to the 390×844 game viewport. */
 export function getEnvScale(): EnvScale {
@@ -318,12 +323,63 @@ export function invalidateLipPoolMask(): void {
   if (lipPoolGraphics) {
     fillBelowLipMaskShape(lipPoolGraphics);
   }
+  invalidateFallsColumnMask();
 }
 
 export function destroyLipPoolMask(): void {
   lipPoolGraphics?.destroy();
   lipPoolGraphics = null;
   lipPoolMask = null;
+}
+
+/** Falls column only — lip down to the foot line (not the wide pool below). */
+export function fillFallsColumnMaskShape(
+  g: Phaser.GameObjects.Graphics,
+  scene: Phaser.Scene,
+): void {
+  const lip = getMaskLipSegmentGame();
+  const base = resolveFallsPoolSprayLine(scene);
+  const bottomY = Math.min(
+    base.y - FALLS_COLUMN_MASK.baseGapPx,
+    GAME_HEIGHT,
+  );
+
+  g.clear();
+  g.fillStyle(0xffffff, 1);
+  g.fillTriangle(lip.left.x, lip.left.y, lip.right.x, lip.right.y, base.right, bottomY);
+  g.fillTriangle(lip.left.x, lip.left.y, base.left, bottomY, base.right, bottomY);
+}
+
+/**
+ * GeometryMask: visible only in the falls column (lip → foot).
+ * Use for vertical streak FX that must not spill into the pool.
+ */
+export function createFallsColumnMask(scene: Phaser.Scene): Phaser.Display.Masks.GeometryMask {
+  destroyFallsColumnMask();
+  fallsColumnMaskScene = scene;
+  fallsColumnGraphics = scene.add.graphics();
+  fallsColumnGraphics.setScrollFactor(0);
+  fallsColumnGraphics.setVisible(false);
+  fillFallsColumnMaskShape(fallsColumnGraphics, scene);
+  fallsColumnMask = fallsColumnGraphics.createGeometryMask();
+  return fallsColumnMask;
+}
+
+export function getFallsColumnMask(scene: Phaser.Scene): Phaser.Display.Masks.GeometryMask {
+  return fallsColumnMask ?? createFallsColumnMask(scene);
+}
+
+export function invalidateFallsColumnMask(): void {
+  if (fallsColumnGraphics && fallsColumnMaskScene) {
+    fillFallsColumnMaskShape(fallsColumnGraphics, fallsColumnMaskScene);
+  }
+}
+
+export function destroyFallsColumnMask(): void {
+  fallsColumnGraphics?.destroy();
+  fallsColumnGraphics = null;
+  fallsColumnMask = null;
+  fallsColumnMaskScene = null;
 }
 
 /** Stretch static 780×1699 layers to fill the viewport (matches setDisplaySize). */
@@ -375,6 +431,125 @@ export function sampleMaskSpanAtGameY(
     left: leftPx * scale.scaleX,
     right: rightPx * scale.scaleX,
   };
+}
+
+export interface FallsPoolSprayLine {
+  y: number;
+  left: number;
+  right: number;
+  centerX: number;
+  width: number;
+}
+
+/**
+ * Falls base line — narrowest water-channel span at the bottom of the fall column
+ * (just above the wide pool / duck miss band), not the open river below.
+ */
+export function resolveFallsPoolSprayLine(scene: Phaser.Scene): FallsPoolSprayLine {
+  const targetY = STAGE.mistZoneTop;
+  const scanTop = targetY - 72;
+  const scanBottom = targetY + 6;
+  let best: FallsPoolSprayLine | null = null;
+
+  for (let y = scanTop; y <= scanBottom; y += 1) {
+    const span = sampleMaskSpanAtGameY(scene, y);
+    if (!span) continue;
+    const width = span.right - span.left;
+    if (width < 48) continue;
+
+    const row: FallsPoolSprayLine = {
+      y,
+      left: span.left,
+      right: span.right,
+      centerX: (span.left + span.right) * 0.5,
+      width,
+    };
+
+    if (
+      !best
+      || width < best.width
+      || (width === best.width && Math.abs(y - targetY) < Math.abs(best.y - targetY))
+    ) {
+      best = row;
+    }
+  }
+
+  if (best) return best;
+
+  const lip = getLipSegmentGame();
+  const left = lip.left.x;
+  const right = lip.right.x;
+  return {
+    y: targetY,
+    left,
+    right,
+    centerX: (left + right) * 0.5,
+    width: right - left,
+  };
+}
+
+/** Evenly spaced emitter X positions along a falls span. */
+export function buildPoolSprayEmitterXs(
+  line: FallsPoolSprayLine,
+  count: number,
+  insetPx: number,
+): number[] {
+  const lo = line.left + insetPx;
+  const hi = line.right - insetPx;
+  if (hi <= lo || count <= 0) return [line.centerX];
+  if (count === 1) return [line.centerX];
+
+  const xs: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1);
+    xs.push(lo + t * (hi - lo));
+  }
+  return xs;
+}
+
+/** Spawn band for downstream river foam — wider pool span below the falls foot. */
+export function resolveRiverFoamSpawnLine(scene: Phaser.Scene): FallsPoolSprayLine {
+  const base = resolveFallsPoolSprayLine(scene);
+  const spawnY = base.y + RIVER_FOAM.spawnBelowBasePx;
+  const span = sampleMaskSpanAtGameY(scene, spawnY);
+
+  if (span) {
+    const left = span.left;
+    const right = span.right;
+    return {
+      y: spawnY,
+      left,
+      right,
+      centerX: (left + right) * 0.5,
+      width: right - left,
+    };
+  }
+
+  return {
+    ...base,
+    y: spawnY,
+  };
+}
+
+/** Points along the diagonal lip for streak emitters (t: 0=left … 1=right). */
+export function sampleLipEmitPoints(count: number): { x: number; y: number }[] {
+  const lip = getMaskLipSegmentGame();
+  if (count <= 1) {
+    return [{
+      x: (lip.left.x + lip.right.x) * 0.5,
+      y: (lip.left.y + lip.right.y) * 0.5,
+    }];
+  }
+
+  const points: { x: number; y: number }[] = [];
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1);
+    points.push({
+      x: Phaser.Math.Linear(lip.left.x, lip.right.x, t),
+      y: Phaser.Math.Linear(lip.left.y, lip.right.y, t),
+    });
+  }
+  return points;
 }
 
 export interface DebugOverlay {
@@ -435,4 +610,6 @@ export function destroyFlowMask(): void {
   flowBitmapMask = null;
   cachedMaskBounds = null;
   destroyLipEmergenceMask();
+  destroyLipPoolMask();
+  destroyFallsColumnMask();
 }

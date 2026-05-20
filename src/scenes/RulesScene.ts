@@ -7,6 +7,7 @@ import { MOONFLOWER_ATLAS_KEYS } from '../config/moonflowerAssets';
 import { GoldenEggMeter } from '../objects/GoldenEggMeter';
 import { ensureLilitaFont, lilitaDisplayStyle } from '../ui/uiChrome';
 import {
+  BAD_TAP_STREAK,
   BALLOON,
   COLORS,
   DUCK_KIND_VISUAL,
@@ -41,8 +42,21 @@ const BODY_BOX_PAD_X = 10;
 const BODY_BOX_PAD_Y = 8;
 const BODY_BOX_RADIUS = 10;
 const BODY_BOX_FILL_ALPHA = 0.26;
-const BAD_TAP_X_COLOR = '#ffd700';
-const BAD_TAP_X_STROKE = '#5a4a00';
+
+function badTapXStyle(
+  style: Phaser.Types.GameObjects.Text.TextStyle,
+  color: string,
+  stroke: string,
+): Phaser.Types.GameObjects.Text.TextStyle {
+  return {
+    fontFamily: style.fontFamily as string,
+    fontSize: style.fontSize,
+    fontStyle: 'bold',
+    color,
+    stroke,
+    strokeThickness: 2,
+  };
+}
 
 /** Capitalize every word after the first (Save The Ducks, Heart Balloon, …). */
 function rulesTitleCase(title: string): string {
@@ -411,31 +425,65 @@ export class RulesScene extends Phaser.Scene {
         'Save ducks one after another to build a combo. More combo = more points!',
         style,
       );
-      const noteY = bodyY + main.height + 4;
-      const paren = this.add.text(bodyX, noteY, '( ', style);
-      const xMark = this.add.text(paren.x + paren.width, noteY, 'X', {
-        fontFamily: style.fontFamily as string,
-        fontSize: style.fontSize,
-        fontStyle: 'bold',
-        color: BAD_TAP_X_COLOR,
-        stroke: BAD_TAP_X_STROKE,
-        strokeThickness: 2,
-      });
-      const suffix = this.add.text(
-        xMark.x + xMark.width,
+      const noteY = bodyY + main.height + 6;
+      const note = this.add.text(
+        bodyX,
         noteY,
-        ' Bad taps break your combo.)',
+        'Bad taps break your combo. After a bad tap you cannot tap again for 200 ms. Two in a row show an orange X and lock tapping for 400 ms. Three or more show a red X and lock tapping for 600 ms.',
         style,
       );
-      const noteH = Math.max(paren.height, xMark.height, suffix.height);
+      const legendY = noteY + note.height + 8;
+      const legend = this.addBadTapStreakLegend(bodyX, legendY, style);
       return {
-        height: main.height + 4 + noteH,
-        children: [main, paren, xMark, suffix],
+        height: main.height + 6 + note.height + 8 + legend.height,
+        children: [main, note, ...legend.children],
       };
     }
 
     const body = this.add.text(bodyX, bodyY, section.body, style);
     return { height: body.height, children: [body] };
+  }
+
+  private addBadTapStreakLegend(
+    bodyX: number,
+    y: number,
+    style: Phaser.Types.GameObjects.Text.TextStyle,
+  ): { height: number; children: Phaser.GameObjects.Text[] } {
+    const cfg = BAD_TAP_STREAK;
+    const items = [
+      { label: '1 miss: ', color: cfg.yellowColor, stroke: cfg.yellowStroke },
+      { label: '2 in a row: ', color: cfg.orangeColor, stroke: cfg.orangeStroke },
+      { label: '3+ in a row: ', color: cfg.redColor, stroke: cfg.redStroke },
+    ];
+
+    const children: Phaser.GameObjects.Text[] = [];
+    let cursorX = bodyX;
+    let rowY = y;
+    let rowH = 0;
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const label = this.add.text(cursorX, rowY, item.label, style);
+      const xMark = this.add.text(
+        label.x + label.width,
+        rowY,
+        'X',
+        badTapXStyle(style, item.color, item.stroke),
+      );
+      children.push(label, xMark);
+      rowH = Math.max(rowH, label.height, xMark.height);
+
+      const nextX = xMark.x + xMark.width + (i < items.length - 1 ? 10 : 0);
+      if (i < items.length - 1 && nextX > bodyX + BODY_W - 48) {
+        rowY += rowH + 4;
+        cursorX = bodyX;
+        rowH = 0;
+      } else {
+        cursorX = nextX;
+      }
+    }
+
+    return { height: rowY - y + rowH, children };
   }
 
   private addNormalDuckPair(

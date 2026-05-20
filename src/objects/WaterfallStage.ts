@@ -12,14 +12,19 @@ import { FlowAtlasCalibrator } from '../dev/FlowAtlasCalibrator';
 import { LeftCliffCalibrator } from '../dev/LeftCliffCalibrator';
 import { isDevMode } from '../dev/isDevMode';
 import { DayNightCycle } from '../effects/DayNightCycle';
+import { PoolSprayWaves } from '../effects/PoolSprayWaves';
+import { RiverFoamDrift } from '../effects/RiverFoamDrift';
+import { WaterfallColumnFx } from '../effects/WaterfallColumnFx';
 import { WaterfallFlowEffect } from '../effects/WaterfallFlowEffect';
-import { createMistEmitter } from '../effects/ParticleEffects';
+import { createFallsBaseMistEmitter } from '../effects/ParticleEffects';
 import {
   createLipEmergenceMask,
   createLipPoolMask,
+  createFallsColumnMask,
   destroyFlowMask,
   drawDebugLipLine,
   fitStaticEnvImage,
+  getFallsColumnMask,
   getLipEmergenceMask as resolveLipEmergenceMask,
   getLipPoolMask as resolveLipPoolMask,
   getLipYGame,
@@ -48,6 +53,9 @@ export class WaterfallStage {
   private layout: StageLayout;
   private flowEffect!: WaterfallFlowEffect;
   private mistEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private poolSprayWaves: PoolSprayWaves | null = null;
+  private riverFoamDrift: RiverFoamDrift | null = null;
+  private waterfallColumnFx: WaterfallColumnFx | null = null;
   private lipCalibrator: EnvironmentCalibrator | null = null;
   private flowCalibrator: FlowAtlasCalibrator | null = null;
   private debugOverlay: DebugOverlay | null = null;
@@ -73,14 +81,24 @@ export class WaterfallStage {
     this.createBackground();
     createLipEmergenceMask(scene);
     createLipPoolMask(scene);
+    createFallsColumnMask(scene);
     this.dayNight = new DayNightCycle(scene);
     this.createCalibrationDim();
     this.flowEffect = new WaterfallFlowEffect(scene);
     this.createForeground();
     this.rocks = new WaterfallRocks(scene);
+    this.rocks.setSprayMask(resolveLipPoolMask(scene));
+    this.rocks.setStreakMask(getFallsColumnMask(scene));
+    const fallsMask = resolveLipPoolMask(scene);
+    this.mistEmitter = createFallsBaseMistEmitter(scene);
+    this.mistEmitter.setMask(fallsMask);
+    this.poolSprayWaves = new PoolSprayWaves(scene);
+    this.poolSprayWaves.setSprayMask(fallsMask);
+    this.riverFoamDrift = new RiverFoamDrift(scene);
+    this.riverFoamDrift.setMask(fallsMask);
+    this.waterfallColumnFx = new WaterfallColumnFx(scene);
+    this.waterfallColumnFx.setMask(fallsMask);
     this.createLeftCliff();
-    this.mistEmitter = createMistEmitter(scene);
-    this.mistEmitter.setDepth(STAGE.mistDepth);
 
     if (isDevMode()) {
       this.lipCalibrator = new EnvironmentCalibrator(scene);
@@ -220,6 +238,12 @@ export class WaterfallStage {
     this.dayNight?.destroy();
     this.flowEffect?.destroy();
     this.mistEmitter?.destroy();
+    this.poolSprayWaves?.destroy();
+    this.poolSprayWaves = null;
+    this.riverFoamDrift?.destroy();
+    this.riverFoamDrift = null;
+    this.waterfallColumnFx?.destroy();
+    this.waterfallColumnFx = null;
     this.rocks?.destroy();
     destroyFlowMask();
   }

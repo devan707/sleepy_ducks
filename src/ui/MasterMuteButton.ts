@@ -28,6 +28,10 @@ export class MasterMuteButton {
     return true;
   }
 
+  static resetSuppress(): void {
+    MasterMuteButton.suppressScenePointer = false;
+  }
+
   /** True when a gameplay tap lands on the mute button (exclude from miss penalty). */
   static hitsWorldPoint(worldX: number, worldY: number): boolean {
     const pos = MasterMuteButton.activeGameplayPos;
@@ -44,32 +48,67 @@ export class MasterMuteButton {
 
   private scene: Phaser.Scene;
   private container: Phaser.GameObjects.Container;
-  private icon: Phaser.GameObjects.Image | null = null;
+  private readonly hit: Phaser.GameObjects.Arc;
+  private iconOn: Phaser.GameObjects.Image;
+  private iconOff: Phaser.GameObjects.Image;
+  private fallbackIcon: Phaser.GameObjects.Image | null = null;
+  private readonly depth: number;
   private unsubscribe: () => void;
 
   constructor(scene: Phaser.Scene, opts: MasterMuteButtonOptions) {
     this.scene = scene;
+    this.depth = opts.depth;
 
-    const hit = scene.add
+    this.hit = scene.add
       .circle(0, 0, RADIUS + 6, 0xffffff, 0)
       .setInteractive({ useHandCursor: true });
 
-    this.icon = this.createIcon();
-    this.container = scene.add.container(opts.x, opts.y, [this.icon, hit]);
+    const hasOn = scene.textures.exists(ASSET_KEYS.uiSoundOn);
+    const hasOff = scene.textures.exists(ASSET_KEYS.uiSoundOff);
+
+    if (hasOn && hasOff) {
+      this.iconOn = scene.add
+        .image(0, 0, ASSET_KEYS.uiSoundOn)
+        .setDisplaySize(ICON_DISPLAY, ICON_DISPLAY)
+        .setOrigin(0.5);
+      this.iconOff = scene.add
+        .image(0, 0, ASSET_KEYS.uiSoundOff)
+        .setDisplaySize(ICON_DISPLAY, ICON_DISPLAY)
+        .setOrigin(0.5);
+      this.container = scene.add.container(opts.x, opts.y, [
+        this.iconOn,
+        this.iconOff,
+        this.hit,
+      ]);
+    } else {
+      const key = scene.textures.exists(ASSET_KEYS.uiGear)
+        ? ASSET_KEYS.uiGear
+        : hasOn
+          ? ASSET_KEYS.uiSoundOn
+          : ASSET_KEYS.uiSoundOff;
+      this.fallbackIcon = scene.add
+        .image(0, 0, key)
+        .setDisplaySize(ICON_DISPLAY, ICON_DISPLAY)
+        .setOrigin(0.5);
+      this.iconOn = this.fallbackIcon;
+      this.iconOff = this.fallbackIcon;
+      this.container = scene.add.container(opts.x, opts.y, [this.fallbackIcon, this.hit]);
+    }
+
     this.container.setDepth(opts.depth).setScrollFactor(0);
     if (opts.alpha !== undefined) {
       this.container.setAlpha(opts.alpha);
     }
 
-    hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    this.hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       pointer.event?.stopPropagation();
       MasterMuteButton.suppressScenePointer = true;
       const muted = toggleMasterMuted();
-      this.refreshIcon();
+      this.syncIcons();
       this.playFeedback(muted);
     });
 
-    hit.on('pointerover', () => {
+    this.hit.on('pointerover', () => {
       scene.tweens.add({
         targets: this.container,
         scaleX: 1.06,
@@ -77,7 +116,7 @@ export class MasterMuteButton {
         duration: 90,
       });
     });
-    hit.on('pointerout', () => {
+    this.hit.on('pointerout', () => {
       scene.tweens.add({
         targets: this.container,
         scaleX: 1,
@@ -86,25 +125,28 @@ export class MasterMuteButton {
       });
     });
 
-    this.unsubscribe = subscribeMasterMute(() => this.refreshIcon());
+    this.unsubscribe = subscribeMasterMute(() => this.syncIcons());
+    this.syncIcons();
   }
 
-  private createIcon(): Phaser.GameObjects.Image {
-    const key = isMasterMuted() ? ASSET_KEYS.uiSoundOff : ASSET_KEYS.uiSoundOn;
-    const fallback = this.scene.textures.exists(key) ? key : ASSET_KEYS.uiGear;
-    return this.scene.add
-      .image(0, 0, fallback)
-      .setDisplaySize(ICON_DISPLAY, ICON_DISPLAY)
-      .setOrigin(0.5);
-  }
-
-  /** Re-create the icon image for the current mute state. */
+  /** Keep the correct on/off art visible for the current mute state. */
   refreshIcon(): void {
-    if (!this.icon) return;
-    const key = isMasterMuted() ? ASSET_KEYS.uiSoundOff : ASSET_KEYS.uiSoundOn;
-    if (!this.scene.textures.exists(key)) return;
-    this.icon.setTexture(key);
-    this.icon.setDisplaySize(ICON_DISPLAY, ICON_DISPLAY);
+    this.syncIcons();
+  }
+
+  private syncIcons(): void {
+    if (this.fallbackIcon) {
+      this.fallbackIcon.setAlpha(isMasterMuted() ? 0.55 : 1);
+      return;
+    }
+
+    const muted = isMasterMuted();
+    this.iconOn.setVisible(!muted);
+    this.iconOff.setVisible(muted);
+    this.container.setDepth(this.depth);
+    if (this.scene.sys.isActive()) {
+      this.scene.children.bringToTop(this.container);
+    }
   }
 
   private playFeedback(muted: boolean): void {

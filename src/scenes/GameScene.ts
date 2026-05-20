@@ -6,17 +6,22 @@ import { ASSET_KEYS } from '../config/assets';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
 import { ensureAppActive } from '../audio/appAudioLifecycle';
+import { resetGameplayPointerSuppress } from '../input/pointerSuppress';
 import { SettingsButton, getDefaultSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
+import { hidePlayerNameOverlay } from '../ui/playerNameOverlay';
 import { MasterMuteButton, getGameMasterMutePosition } from '../ui/MasterMuteButton';
 import { LevelPassedBanner } from '../ui/LevelPassedBanner';
 import { MOONFLOWER_ATLAS_KEYS } from '../config/moonflowerAssets';
 import {
   BALLOON,
+  BAD_TAP_STREAK,
   COLORS,
   COMBO,
+  DREAMWEED,
   getComboMilestoneTier,
   DUCK,
+  GAMEPLAY_TOAST,
   getAlmostThereSec,
   GOLDEN_EGG,
   HUD_RUN_CLOCK,
@@ -69,6 +74,7 @@ import { WatchModeControls } from '../dev/WatchModeControls';
 import { clearEnvironmentGeometryOverride } from '../config/environmentGeometry';
 import { DifficultyManager } from '../systems/DifficultyManager';
 import { MoonflowerController } from '../systems/MoonflowerController';
+import { DreamweedGrabSuppress } from '../objects/Dreamweed';
 import { DreamweedController } from '../systems/DreamweedController';
 import { SpawnController } from '../systems/SpawnController';
 
@@ -108,6 +114,12 @@ export class GameScene extends Phaser.Scene {
   private suppressTapOnPointerUp = false;
   /** Active dreamweed grab — suppresses bad taps until pointer up. */
   private dreamweedGrabActive = false;
+  /** Skip one pointer-up bad tap after dreamweed collect/release (same gesture). */
+  private skipBadTapOnNextPointerUp = false;
+  /** Pointer down was on empty/decoy space — may become a bad tap on up. */
+  private pendingBadTapAtDown = false;
+  /** Which pointer owns {@link pendingBadTapAtDown} (avoids multi-touch duck saves). */
+  private badTapPendingPointerId: number | null = null;
   /** Prevents double life loss from one mistake in the same frame. */
   private lifeLossCooldown = false;
   private bottomToast!: GameplayBottomToast;
@@ -120,6 +132,10 @@ export class GameScene extends Phaser.Scene {
   private goldenEggCreditedDucks = new WeakSet<Duck>();
   private levelPassedThisRun = false;
   private levelPassedBanner: LevelPassedBanner | null = null;
+  private onAnonUnlockPointer?: (pointer: Phaser.Input.Pointer) => void;
+  private heartBalloonTimers: Phaser.Time.TimerEvent[] = [];
+  private consecutiveBadTaps = 0;
+  private tapInputLockedUntil = 0;
 
   constructor() {
     super(SCENE_KEYS.game);
@@ -137,6 +153,7 @@ export class GameScene extends Phaser.Scene {
         .setDepth(200);
 
       loadGameAssets(this).then(() => {
+        if (!this.scene.isActive()) return;
         wait.destroy();
         this.initRound();
       });
@@ -147,6 +164,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   private initRound(): void {
+    hidePlayerNameOverlay();
+    resetGameplayPointerSuppress();
+    this.settingsDrawer?.destroy();
+    this.settingsButton?.destroy();
+    this.masterMuteButton?.destroy();
     clearEnvironmentGeometryOverride();
     this.isGameOver = false;
     this.settingsPaused = false;
@@ -167,8 +189,15 @@ export class GameScene extends Phaser.Scene {
     this.comboDrainProgress = 0;
     this.stats = createRunStats();
     this.activeBalloons = [];
+    this.pointerDownX = 0;
+    this.pointerDownY = 0;
     this.suppressTapOnPointerUp = false;
     this.dreamweedGrabActive = false;
+    this.skipBadTapOnNextPointerUp = false;
+    this.pendingBadTapAtDown = false;
+    this.badTapPendingPointerId = null;
+    this.consecutiveBadTaps = 0;
+    this.tapInputLockedUntil = 0;
 
     this.cameras.main.setBackgroundColor(COLORS.skyBottom);
     this.cameras.main.fadeIn(300, 0, 0, 0);
@@ -179,9 +208,11 @@ export class GameScene extends Phaser.Scene {
     const layout = this.stage.getLayout();
 
     this.soundManager = SoundManager.forScene(this);
+    this.soundManager.clearPlaybackInterruptions();
     this.soundManager.resumeGameplaySfx();
     this.soundManager.startGameplayBackground();
     this.musicManager = MusicManager.getInstance();
+    this.musicManager.clearPlaybackInterruptions();
     this.musicManager.playGameplay();
     this.settingsDrawer = new SettingsDrawer(this, {
       depth: STAGE.hudDepth + 20,
@@ -191,7 +222,10 @@ export class GameScene extends Phaser.Scene {
       mode: 'gameplay',
       onOpen: () => this.applySettingsPause(),
       onClose: () => {
-        if (this.viewingRulesFromSettings) return;
+        if (this.viewingRulesFromSettings) {
+          this.applySettingsResume();
+          return;
+        }
         if (!this.leavingViaSettings) this.applySettingsResume();
       },
       onQuitToMenu: () => this.quitToMenu(),
@@ -207,9 +241,10 @@ export class GameScene extends Phaser.Scene {
     const gearPos = getDefaultSettingsButtonPosition();
     const mutePos = getGameMasterMutePosition(gearPos);
     this.masterMuteButton = new MasterMuteButton(this, {
-      depth: STAGE.hudDepth + 3,
+      depth: STAGE.depthGameplayToast + 1,
       ...mutePos,
     });
+    this.masterMuteButton.refreshIcon();
     MasterMuteButton.setActiveGameplayPosition(mutePos);
     this.difficulty = new DifficultyManager();
     this.hud = new HUD(this);
@@ -229,7 +264,7 @@ export class GameScene extends Phaser.Scene {
       this.stage,
     );
 
-    this.moonflowerController = new MoonflowerController(this, this.stage, this.bottomToast);
+    this.moonflowerController = new MoonflowerController(this, this.stage);
     this.dreamweedController = new DreamweedController(this, this.stage);
     this.hud.setMoonflowerCollectedThisRun(false);
     this.hud.setDreamweedRunCount(0);
@@ -274,10 +309,15 @@ export class GameScene extends Phaser.Scene {
       this.events.on(CALIBRATION_MODE_EVENT, this.onCalibrationModeChanged, this);
     }
 
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+    this.onAnonUnlockPointer = (pointer: Phaser.Input.Pointer) => {
       if (!pointer.wasTouch && pointer.button !== 0) return;
       this.soundManager.tryUnlock();
-    });
+    };
+    this.input.off('pointerdown', this.onAnonUnlockPointer);
+    this.input.off('pointerdown', this.onPointerDown, this);
+    this.input.off('pointermove', this.onPointerMove, this);
+    this.input.off('pointerup', this.onPointerUp, this);
+    this.input.on('pointerdown', this.onAnonUnlockPointer);
     this.input.on('pointerdown', this.onPointerDown, this);
     this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
@@ -329,15 +369,16 @@ export class GameScene extends Phaser.Scene {
     this.spawner.stop();
     this.moonflowerController?.setEnabled(false);
     this.dreamweedController?.setEnabled(false);
-    this.musicManager.pauseForInterruption();
-    this.soundManager.pauseForInterruption();
+    this.musicManager.pauseForSettings();
+    this.soundManager.pauseForSettings();
   }
 
   private applySettingsResume(): void {
     if (!this.settingsPaused) return;
     this.settingsPaused = false;
-    this.musicManager.resumeFromInterruption();
-    this.soundManager.resumeFromInterruption();
+    hidePlayerNameOverlay();
+    this.musicManager.resumeFromSettings();
+    this.soundManager.resumeFromSettings();
     if (!this.isGameOver && !this.calibrationMode) {
       this.moonflowerController?.setEnabled(true);
       this.dreamweedController?.setEnabled(true);
@@ -347,10 +388,12 @@ export class GameScene extends Phaser.Scene {
 
   private openRulesFromSettings(): void {
     this.viewingRulesFromSettings = true;
+    hidePlayerNameOverlay();
     this.settingsDrawer.close();
     this.time.delayedCall(260, () => {
       if (!this.scene.isActive()) return;
       this.scene.launch(SCENE_KEYS.rules, { returnToGame: true });
+      this.scene.bringToTop(SCENE_KEYS.rules);
     });
   }
 
@@ -365,6 +408,7 @@ export class GameScene extends Phaser.Scene {
   private quitToMenu(): void {
     this.leavingViaSettings = true;
     this.settingsPaused = true;
+    hidePlayerNameOverlay();
     this.spawner.stop();
     this.settingsDrawer.close();
     this.musicManager.clearPlaybackInterruptions();
@@ -415,66 +459,228 @@ export class GameScene extends Phaser.Scene {
     /* Ducks use scene-level picking; no per-duck input to restore. */
   }
 
-  private onPointerDown(pointer: Phaser.Input.Pointer): void {
-    if (pointer.button !== 0) return;
-    if (SettingsButton.consumeSceneSuppress()) return;
-    if (MoonflowerController.consumeTapSuppress()) return;
-    if (DreamweedController.consumeGrabSuppress()) return;
-    if (this.settingsDrawer?.isOpen()) return;
+  private reconcileGameplayTapState(): void {
+    if (this.isGameOver || this.calibrationMode) return;
 
+    const drawerOpen = this.settingsDrawer?.isOpen() ?? false;
+    if (
+      !drawerOpen &&
+      this.settingsPaused &&
+      !this.viewingRulesFromSettings &&
+      !this.leavingViaSettings
+    ) {
+      this.applySettingsResume();
+    }
+
+    if (!drawerOpen) {
+      this.soundManager.forceResumePlayback();
+      this.soundManager.reconcileTapFeedbackAudio();
+    }
+  }
+
+  private beginPointerGesture(pointer: Phaser.Input.Pointer): void {
     this.pointerDownX = pointer.worldX;
     this.pointerDownY = pointer.worldY;
+    this.skipBadTapOnNextPointerUp = false;
+    this.suppressTapOnPointerUp = false;
+    this.dreamweedGrabActive = false;
+    DreamweedGrabSuppress.reset();
+  }
+
+  private clearBadTapPendingForPointer(pointerId: number): void {
+    if (this.badTapPendingPointerId !== pointerId) return;
+    this.pendingBadTapAtDown = false;
+    this.badTapPendingPointerId = null;
+  }
+
+  private setBadTapPending(pointerId: number): void {
+    this.pendingBadTapAtDown = true;
+    this.badTapPendingPointerId = pointerId;
+  }
+
+  private isForeignBadTapPending(pointerId: number): boolean {
+    return (
+      this.badTapPendingPointerId !== null &&
+      this.badTapPendingPointerId !== pointerId
+    );
+  }
+
+  private clearDreamweedGrabState(): void {
+    this.dreamweedGrabActive = false;
+    DreamweedGrabSuppress.reset();
+  }
+
+  private isPointerSwipeFromDown(worldX: number, worldY: number): boolean {
+    const dx = worldX - this.pointerDownX;
+    const dy = worldY - this.pointerDownY;
+    const slop = DUCK.tapSlopPx;
+    if (dx * dx + dy * dy <= slop * slop) return false;
+
+    const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
+    if (absDx >= DREAMWEED.swipeMinPx && absDx > absDy) return true;
+
+    return dx * dx + dy * dy > slop * slop;
+  }
+
+  private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (pointer.button !== 0) return;
+    if (this.isTapInputLocked()) return;
+    if (this.isForeignBadTapPending(pointer.id)) return;
+
+    this.beginPointerGesture(pointer);
+
+    if (SettingsButton.consumeSceneSuppress()) return;
+    if (MoonflowerController.consumeTapSuppress()) return;
+    if (this.settingsDrawer?.isOpen()) return;
+
+    this.reconcileGameplayTapState();
+
     this.musicManager.tryUnlock();
     this.soundManager.tryUnlock();
 
     if (this.dreamweedController?.tryBeginGrab(pointer.worldX, pointer.worldY)) {
       this.dreamweedGrabActive = true;
-      this.suppressTapOnPointerUp = true;
       return;
     }
 
-    this.suppressTapOnPointerUp = this.tryPointerTap(pointer.worldX, pointer.worldY, false);
+    this.suppressTapOnPointerUp = this.tryPointerTap(
+      pointer.worldX,
+      pointer.worldY,
+      false,
+      pointer.id,
+    );
+    if (
+      !this.suppressTapOnPointerUp &&
+      !this.getEmptyBadTapRejectReason(pointer.worldX, pointer.worldY)
+    ) {
+      this.setBadTapPending(pointer.id);
+    }
   }
 
-  private isPointerSwipe(pointer: Phaser.Input.Pointer): boolean {
-    const dx = pointer.worldX - this.pointerDownX;
-    const dy = pointer.worldY - this.pointerDownY;
-    const slop = DUCK.tapSlopPx;
-    return dx * dx + dy * dy > slop * slop;
+  /** True when pointer-up should count as a bad tap (tap, not swipe). */
+  private shouldRegisterBadTap(pointer: Phaser.Input.Pointer): boolean {
+    return !this.isPointerSwipeFromDown(pointer.worldX, pointer.worldY);
+  }
+
+  /** Bad tap at the original pointer-down point (ducks/moonflower already handled on down). */
+  private tryRecordBadTapAtDown(): void {
+    const worldX = this.pointerDownX;
+    const worldY = this.pointerDownY;
+
+    if (this.isTapOnDecoy(worldX, worldY)) {
+      this.recordBadTap('decoy', worldX, worldY);
+      return;
+    }
+
+    this.recordBadTap('empty', worldX, worldY);
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
-    if (!this.dreamweedGrabActive) return;
-    if (this.dreamweedController?.trySwipeCollect(pointer.worldX)) {
-      this.dreamweedGrabActive = false;
-      this.suppressTapOnPointerUp = true;
+    if (!pointer.isDown || this.calibrationMode || this.isGameOver || this.settingsPaused) {
+      return;
+    }
+    if (this.settingsDrawer?.isOpen()) return;
+
+    if (!this.dreamweedGrabActive) {
+      if (this.dreamweedController?.tryBeginGrab(pointer.worldX, pointer.worldY)) {
+        this.dreamweedGrabActive = true;
+        this.clearBadTapPendingForPointer(pointer.id);
+      } else if (
+        this.dreamweedController?.trySwipeCollectSnagged(
+          this.pointerDownX,
+          pointer.worldX,
+          pointer.worldY,
+        )
+      ) {
+        this.clearDreamweedGrabState();
+        this.skipBadTapOnNextPointerUp = true;
+        this.clearBadTapPendingForPointer(pointer.id);
+      }
+      return;
+    }
+
+    if (
+      this.dreamweedController?.trySwipeCollect(
+        pointer.worldX,
+        this.pointerDownX,
+      )
+    ) {
+      this.clearDreamweedGrabState();
+      this.skipBadTapOnNextPointerUp = true;
+      this.clearBadTapPendingForPointer(pointer.id);
     }
   }
 
   private onPointerUp(pointer: Phaser.Input.Pointer): void {
     if (pointer.button !== 0) return;
-    if (SettingsButton.consumeSceneSuppress()) return;
-    if (MoonflowerController.consumeTapSuppress()) return;
-    if (DreamweedController.consumeGrabSuppress()) return;
+    if (SettingsButton.consumeSceneSuppress()) {
+      this.clearBadTapPendingForPointer(pointer.id);
+      this.skipBadTapOnNextPointerUp = false;
+      this.suppressTapOnPointerUp = false;
+      return;
+    }
+    if (MoonflowerController.consumeTapSuppress()) {
+      this.clearBadTapPendingForPointer(pointer.id);
+      this.skipBadTapOnNextPointerUp = false;
+      this.suppressTapOnPointerUp = false;
+      return;
+    }
     if (this.settingsDrawer?.isOpen()) return;
 
     if (this.dreamweedGrabActive) {
       this.dreamweedController?.releaseGrab();
-      this.dreamweedGrabActive = false;
-      this.suppressTapOnPointerUp = true;
-      return;
-    }
-
-    if (this.suppressTapOnPointerUp) {
+      this.clearDreamweedGrabState();
+      this.skipBadTapOnNextPointerUp = true;
+    } else if (
+      this.dreamweedController?.trySwipeCollectSnagged(
+        this.pointerDownX,
+        pointer.worldX,
+        pointer.worldY,
+      )
+    ) {
+      this.clearDreamweedGrabState();
+      this.skipBadTapOnNextPointerUp = true;
+      this.clearBadTapPendingForPointer(pointer.id);
+    } else if (this.skipBadTapOnNextPointerUp) {
+      this.skipBadTapOnNextPointerUp = false;
+    } else if (this.suppressTapOnPointerUp) {
       this.suppressTapOnPointerUp = false;
-      return;
+    } else if (
+      this.pendingBadTapAtDown &&
+      this.badTapPendingPointerId === pointer.id &&
+      this.shouldRegisterBadTap(pointer)
+    ) {
+      this.tryRecordBadTapAtDown();
     }
+    this.clearBadTapPendingForPointer(pointer.id);
+  }
 
-    if (this.isPointerSwipe(pointer)) {
-      return;
+  /** Empty/decoy tap target — ducks and charms already handled on pointer down. */
+  private getEmptyBadTapRejectReason(worldX: number, worldY: number): string | null {
+    if (this.calibrationMode || this.isGameOver || this.settingsPaused) return 'paused';
+    if (this.isGameplayUiTap(worldX, worldY)) return 'ui';
+    if (this.moonflowerController?.containsWorldPoint(worldX, worldY)) return 'moonflower';
+    if (
+      this.activeBalloons.some(
+        (b) => b.active && b.containsWorldPoint(worldX, worldY),
+      )
+    ) {
+      return 'balloon';
     }
+    if (this.isPointerOnSleepingDuck(worldX, worldY)) return 'duck';
+    if (this.isTapOnEarlyLockedDuck(worldX, worldY)) return 'early-locked';
+    return null;
+  }
 
-    this.tryPointerTap(this.pointerDownX, this.pointerDownY, true);
+  /** Hit test only — does not wake ducks or emit events. */
+  private isPointerOnSleepingDuck(worldX: number, worldY: number): boolean {
+    return (this.ducks.getChildren() as Duck[]).some(
+      (d) =>
+        d.active &&
+        d.canReceiveTap() &&
+        d.containsWorldPoint(worldX, worldY),
+    );
   }
 
   private isGameplayUiTap(worldX: number, worldY: number): boolean {
@@ -488,11 +694,17 @@ export class GameScene extends Phaser.Scene {
     worldX: number,
     worldY: number,
     allowBadTap: boolean,
+    pointerId?: number,
   ): boolean {
     if (this.calibrationMode || this.isGameOver || this.settingsPaused) return false;
+    if (this.isTapInputLocked()) return false;
+    if (pointerId !== undefined && this.isForeignBadTapPending(pointerId)) {
+      return false;
+    }
     if (this.isGameplayUiTap(worldX, worldY)) return false;
 
     if (this.moonflowerController?.tryTap(worldX, worldY)) {
+      this.resetBadTapStreak();
       return true;
     }
 
@@ -507,11 +719,15 @@ export class GameScene extends Phaser.Scene {
       if (balloon.tap() === 'popped') {
         this.onBalloonPopped(bx, by);
       }
+      this.resetBadTapStreak();
       return true;
     }
 
     const duckResult = this.tryTapDuckAt(worldX, worldY);
-    if (duckResult !== 'none') return true;
+    if (duckResult !== 'none') {
+      this.resetBadTapStreak();
+      return true;
+    }
 
     if (this.isTapOnEarlyLockedDuck(worldX, worldY)) return true;
 
@@ -558,18 +774,34 @@ export class GameScene extends Phaser.Scene {
     return sleeping[0].tap();
   }
 
+  private cancelHeartBalloonTimers(): void {
+    for (const timer of this.heartBalloonTimers) {
+      timer.remove(false);
+    }
+    this.heartBalloonTimers = [];
+  }
+
   private scheduleHeartBalloons(): void {
+    this.cancelHeartBalloonTimers();
     const delays = [
       Phaser.Math.Between(BALLOON.firstMinDelayMs, BALLOON.firstMaxDelayMs),
       Phaser.Math.Between(BALLOON.secondMinDelayMs, BALLOON.secondMaxDelayMs),
     ];
     for (const delay of delays) {
-      this.time.delayedCall(delay, () => this.spawnHeartBalloon());
+      const timer = this.time.delayedCall(delay, () => this.spawnHeartBalloon());
+      this.heartBalloonTimers.push(timer);
     }
   }
 
   private spawnHeartBalloon(): void {
-    if (this.isGameOver || this.calibrationMode) return;
+    if (
+      this.isGameOver ||
+      this.calibrationMode ||
+      this.settingsPaused ||
+      this.leavingViaSettings
+    ) {
+      return;
+    }
     const balloon = new HeartBalloon(this);
     balloon.once('destroy', () => {
       this.activeBalloons = this.activeBalloons.filter((b) => b !== balloon);
@@ -603,12 +835,9 @@ export class GameScene extends Phaser.Scene {
   private onEarlyTap(payload: DuckEarlyTapPayload): void {
     if (this.calibrationMode) return;
 
-    if (isWatchModeActive()) {
-      if (payload.breaksCombo) this.resetCombo();
-      return;
+    if (!isWatchModeActive()) {
+      recordMissedTap(this.stats);
     }
-
-    recordMissedTap(this.stats);
     if (payload.breaksCombo) {
       this.resetCombo();
     }
@@ -624,16 +853,59 @@ export class GameScene extends Phaser.Scene {
   private recordBadTap(kind: BadTapKind, x: number, y: number): void {
     if (this.isGameOver || this.calibrationMode) return;
 
-    if (isWatchModeActive()) {
-      this.resetCombo();
-      return;
-    }
+    this.consecutiveBadTaps += 1;
+    const feedback = this.resolveBadTapStreakFeedback(this.consecutiveBadTaps);
+    this.applyTapInputLock(feedback.lockMs);
 
-    recordMissedTap(this.stats);
+    if (!isWatchModeActive()) {
+      recordMissedTap(this.stats);
+      this.events.emit(GameEvents.BAD_TAP, { kind, x, y });
+    }
     this.resetCombo();
-    this.soundManager.play('badTap');
-    this.showBadTapX(x, y);
-    this.events.emit(GameEvents.BAD_TAP, { kind, x, y });
+    this.soundManager.playBadTapStreak(this.consecutiveBadTaps);
+    this.showBadTapX(x, y, feedback.color, feedback.stroke);
+  }
+
+  private isTapInputLocked(): boolean {
+    return performance.now() < this.tapInputLockedUntil;
+  }
+
+  private applyTapInputLock(ms: number): void {
+    this.tapInputLockedUntil = Math.max(
+      this.tapInputLockedUntil,
+      performance.now() + ms,
+    );
+  }
+
+  private resetBadTapStreak(): void {
+    this.consecutiveBadTaps = 0;
+  }
+
+  private resolveBadTapStreakFeedback(streak: number): {
+    color: string;
+    stroke: string;
+    lockMs: number;
+  } {
+    const cfg = BAD_TAP_STREAK;
+    if (streak >= cfg.redAt) {
+      return {
+        color: cfg.redColor,
+        stroke: cfg.redStroke,
+        lockMs: cfg.redLockMs,
+      };
+    }
+    if (streak >= cfg.orangeAt) {
+      return {
+        color: cfg.orangeColor,
+        stroke: cfg.orangeStroke,
+        lockMs: cfg.orangeLockMs,
+      };
+    }
+    return {
+      color: cfg.yellowColor,
+      stroke: cfg.yellowStroke,
+      lockMs: cfg.firstLockMs,
+    };
   }
 
   /**
@@ -691,15 +963,20 @@ export class GameScene extends Phaser.Scene {
 
     const watchPaused = isWatchModeActive() && isWatchTimePaused();
     const simDelta = watchPaused ? 0 : delta;
+    const gameplayPaused = this.calibrationMode || watchPaused || this.settingsPaused;
 
     this.stage.update(_time, simDelta, this.difficulty.elapsedSeconds);
-    this.musicManager.updateGameplayMusicCrossfade(this.difficulty.elapsedSeconds);
 
-    if (this.calibrationMode || watchPaused || this.settingsPaused) return;
+    if (!gameplayPaused) {
+      tickSurvivalTime(this.stats, delta);
+      this.hud.setElapsedTime(this.stats.timeSurvivedMs);
+      this.difficulty.update(delta);
+    }
 
-    tickSurvivalTime(this.stats, delta);
-    this.hud.setElapsedTime(this.stats.timeSurvivedMs);
-    this.difficulty.update(delta);
+    // Day/night music follows the HUD MM:SS clock — frozen while settings are open.
+    this.musicManager.updateGameplayMusicCrossfade(this.stats.timeSurvivedMs / 1000);
+
+    if (gameplayPaused) return;
     const motion = this.difficulty.getMotionParams();
 
     const children = this.ducks.getChildren() as unknown as Duck[];
@@ -743,6 +1020,11 @@ export class GameScene extends Phaser.Scene {
         text: 'Collect the moonflower after sunset',
         imageKey: MOONFLOWER_ATLAS_KEYS.sway,
         imageFrame: 'frame_000',
+        imageHeight: GAMEPLAY_TOAST.moonflowerHintImageSize,
+        fontSize: GAMEPLAY_TOAST.moonflowerHintFontSize,
+        panelHeight: GAMEPLAY_TOAST.moonflowerHintPanelHeight,
+        panelMinWidth: GAMEPLAY_TOAST.moonflowerHintPanelMinWidth,
+        holdMs: GAMEPLAY_TOAST.moonflowerHintHoldMs,
       });
     }
 
@@ -765,7 +1047,10 @@ export class GameScene extends Phaser.Scene {
       hudSec >= getAlmostThereSec()
     ) {
       this.almostThereShown = true;
-      this.levelPassedBanner?.show({ title: 'Almost There!' });
+      this.levelPassedBanner?.show({
+        title: 'Almost There!',
+        holdBeforeFadeMs: HUD_RUN_CLOCK.almostThereBannerHoldMs,
+      });
     }
 
     if (hudSec >= HUD_RUN_CLOCK.levelPassSec) {
@@ -782,11 +1067,20 @@ export class GameScene extends Phaser.Scene {
 
   private onCharmCollected(payload: { id: string; x?: number; y?: number }): void {
     if (payload.id === 'moonflower' && payload.x != null && payload.y != null) {
+      this.levelPassedBanner?.show({
+        title: 'Moonflower Collected!',
+        titleFontSizePx: 26,
+        titleColor: '#9ee8ff',
+        titleStroke: '#1a3a4a',
+        titleStrokeThickness: 5,
+      });
       this.soundManager.playMoonflowerCollect();
       this.hud.playMoonflowerCollectFly(payload.x, payload.y);
       return;
     }
     if (payload.id === 'dreamweed' && payload.x != null && payload.y != null) {
+      this.soundManager.reconcileTapFeedbackAudio();
+      this.soundManager.playDreamweedCollect();
       this.hud.playDreamweedCollectFly(payload.x, payload.y);
       return;
     }
@@ -949,6 +1243,8 @@ export class GameScene extends Phaser.Scene {
         : 'passed'
       : 'failed';
 
+    this.musicManager.playGameOver(outcome === 'failed' ? 'failed' : 'passed');
+
     const data: GameOverData = {
       score: this.score,
       stats: { ...this.stats },
@@ -981,19 +1277,24 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Small yellow X at the tap point for any bad tap. */
-  private showBadTapX(x: number, y: number): void {
+  /** Bad-tap X at the tap point — yellow, orange (2 in a row), or red (3+). */
+  private showBadTapX(
+    x: number,
+    y: number,
+    color: string = BAD_TAP_STREAK.yellowColor,
+    stroke: string = BAD_TAP_STREAK.yellowStroke,
+  ): void {
     const mark = this.add
       .text(x, y - 6, 'X', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '16px',
         fontStyle: 'bold',
-        color: '#ffd700',
-        stroke: '#5a4a00',
+        color,
+        stroke,
         strokeThickness: 2,
       })
       .setOrigin(0.5)
-      .setDepth(STAGE.hudDepth + 2);
+      .setDepth(STAGE.depthGameplayToast + 1);
 
     mark.setScale(0.35);
     this.tweens.add({
@@ -1015,6 +1316,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    hidePlayerNameOverlay();
+    this.cancelHeartBalloonTimers();
+    if (this.onAnonUnlockPointer) {
+      this.input.off('pointerdown', this.onAnonUnlockPointer);
+      this.onAnonUnlockPointer = undefined;
+    }
     this.musicManager?.clearPlaybackInterruptions();
     this.input.off('pointerdown', this.onPointerDown, this);
     this.input.off('pointermove', this.onPointerMove, this);
@@ -1053,6 +1360,7 @@ export class GameScene extends Phaser.Scene {
     this.masterMuteButton?.destroy();
     MasterMuteButton.setActiveGameplayPosition(null);
     this.soundManager?.detach();
+    resetGameplayPointerSuppress();
     this.hud?.destroy();
     this.stage?.destroy();
     this.ducks?.clear(true, true);

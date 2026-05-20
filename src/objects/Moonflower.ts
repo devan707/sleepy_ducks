@@ -17,6 +17,10 @@ export class MoonflowerTapSuppress {
     MoonflowerTapSuppress.active = false;
     return true;
   }
+
+  static reset(): void {
+    MoonflowerTapSuppress.active = false;
+  }
 }
 
 export class Moonflower extends Phaser.GameObjects.Container {

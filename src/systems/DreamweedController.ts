@@ -67,10 +67,40 @@ export class DreamweedController {
     return true;
   }
 
-  trySwipeCollect(worldX: number): boolean {
+  trySwipeCollect(worldX: number, gestureStartX?: number): boolean {
     if (!this.grabbedDreamweed?.active) return false;
-    const dx = worldX - this.grabStartX;
+    const dxGrab = worldX - this.grabStartX;
+    const dxGesture =
+      gestureStartX != null ? worldX - gestureStartX : dxGrab;
+    const dx =
+      Math.abs(dxGrab) >= Math.abs(dxGesture) ? dxGrab : dxGesture;
     if (!this.grabbedDreamweed.trySwipeCollect(dx)) return false;
+    this.collect();
+    return true;
+  }
+
+  /**
+   * Collect a rock-snagged weed with a horizontal swipe — no grab required.
+   * Pointer must pass near the weed at swipe start or end.
+   */
+  trySwipeCollectSnagged(
+    gestureStartX: number,
+    worldX: number,
+    worldY: number,
+  ): boolean {
+    const weed = this.activeDreamweed;
+    if (!weed?.active || !weed.isRockSnagged()) return false;
+
+    const dx = worldX - gestureStartX;
+    if (Math.abs(dx) < DREAMWEED.swipeMinPx) return false;
+
+    const nearPad = DREAMWEED.rockSnagHitPad;
+    const nearWeed =
+      weed.isNearWorldPoint(worldX, worldY, nearPad) ||
+      weed.isNearWorldPoint(gestureStartX, worldY, nearPad) ||
+      weed.isNearWorldPoint((gestureStartX + worldX) * 0.5, worldY, nearPad);
+    if (!nearWeed) return false;
+
     this.collect();
     return true;
   }
@@ -79,6 +109,7 @@ export class DreamweedController {
     this.grabbedDreamweed?.releaseGrab();
     this.grabbedDreamweed = null;
     this.grabStartX = 0;
+    DreamweedGrabSuppress.reset();
   }
 
   update(delta: number): void {
@@ -158,6 +189,7 @@ export class DreamweedController {
 
     this.grabbedDreamweed = null;
     this.grabStartX = 0;
+    DreamweedGrabSuppress.reset();
     this.destroyActiveDreamweed();
 
     this.runCollectCount += 1;

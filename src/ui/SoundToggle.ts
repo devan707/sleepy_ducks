@@ -20,6 +20,10 @@ export class SoundToggle {
     return true;
   }
 
+  static resetSuppress(): void {
+    SoundToggle.suppressScenePointer = false;
+  }
+
   private scene: Phaser.Scene;
   private manager: SoundManager;
   private container: Phaser.GameObjects.Container;

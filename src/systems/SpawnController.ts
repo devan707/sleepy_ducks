@@ -47,6 +47,7 @@ export class SpawnController {
   }
 
   start(): void {
+    this.stop();
     this.mallardMixer.reset();
     this.startDelayTimer = this.scene.time.delayedCall(
       DUCK_SPAWN.firstSpawnDelayMs,

@@ -7,6 +7,7 @@ import { SoundManager } from '../audio/SoundManager';
 import { ensureAppActive } from '../audio/appAudioLifecycle';
 import { SettingsButton, getMenuSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
+import { hidePlayerNameOverlay } from '../ui/playerNameOverlay';
 import { FloatingAnimButton } from '../ui/FloatingAnimButton';
 import { MasterMuteButton, getMenuMasterMutePosition } from '../ui/MasterMuteButton';
 import {
@@ -65,8 +66,8 @@ export class MenuScene extends Phaser.Scene {
       musicManager: this.musicManager,
       soundManager: this.soundManager,
       musicContext: 'menuUi',
-      onOpen: () => this.musicManager.pauseForInterruption(),
-      onClose: () => this.musicManager.resumeFromInterruption(),
+      onOpen: () => this.musicManager.pauseForSettings(),
+      onClose: () => this.musicManager.resumeFromSettings(),
     });
     const gearPos = getMenuSettingsButtonPosition();
     this.settingsButton = new SettingsButton(this, {
@@ -83,6 +84,12 @@ export class MenuScene extends Phaser.Scene {
       alpha: 0.78,
       ...getMenuMasterMutePosition(gearPos),
     });
+    if (
+      this.textures.exists(ASSET_KEYS.uiSoundOn) ||
+      this.textures.exists(ASSET_KEYS.uiSoundOff)
+    ) {
+      this.masterMuteButton.refreshIcon();
+    }
 
     this.createBackground();
     addVerticalVignettes(this, DEPTH.vignette);
@@ -245,6 +252,8 @@ export class MenuScene extends Phaser.Scene {
 
   private startGame(): void {
     this.starting = true;
+    hidePlayerNameOverlay();
+    this.settingsDrawer?.close();
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.time.delayedCall(280, () => {
       this.scene.start(SCENE_KEYS.game);
@@ -286,12 +295,14 @@ export class MenuScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    hidePlayerNameOverlay();
     this.clearInstallPromptSchedule();
     hideInstallPromptBanner();
     this.settingsDrawer?.destroy();
     this.settingsButton?.destroy();
     this.masterMuteButton?.destroy();
     this.playButton?.destroy();
+    this.musicManager?.clearPlaybackInterruptions();
     this.soundManager?.detach();
     this.input.off('pointerdown');
   }

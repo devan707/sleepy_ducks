@@ -5,6 +5,7 @@ import { registerZzzAnimations } from '../assets/ZzzAnimations';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
 import { ensureAppActive } from '../audio/appAudioLifecycle';
+import { resetGameplayPointerSuppress } from '../input/pointerSuppress';
 import { SettingsButton, getMenuSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
 import { FloatingAnimButton } from '../ui/FloatingAnimButton';
@@ -29,6 +30,7 @@ import {
   lilitaDisplayStyle,
 } from '../ui/uiChrome';
 import { GameplayBottomToast } from '../ui/GameplayBottomToast';
+import { hidePlayerNameOverlay } from '../ui/playerNameOverlay';
 
 const DEPTH = {
   bg: 0,
@@ -46,6 +48,8 @@ const MOONFLOWER_CELEBRATION_LIFT_Y = 22;
 const MOONFLOWER_TEXT_LIFT_Y = 28;
 const MOONFLOWER_CHARMS_LINK_GAP = 14;
 const MOONFLOWER_SCORE_CARD_GAP = 28;
+/** Pull score card up on the moonflower-collected level-pass screen. */
+const MOONFLOWER_PASSED_SCORE_CARD_LIFT_Y = 22;
 const PASSED_SCORE_CARD_OFFSET_Y = 15;
 /** Flying female duck below level-passed banner (no moonflower). */
 const PASSED_DUCK_HERO_HEIGHT = 128;
@@ -99,8 +103,8 @@ export class GameOverScene extends Phaser.Scene {
       musicManager: this.musicManager,
       soundManager: this.soundManager,
       musicContext: 'gameOver',
-      onOpen: () => this.musicManager.pauseForInterruption(),
-      onClose: () => this.musicManager.resumeFromInterruption(),
+      onOpen: () => this.musicManager.pauseForSettings(),
+      onClose: () => this.musicManager.resumeFromSettings(),
     });
     const gearPos = getMenuSettingsButtonPosition();
     this.settingsButton = new SettingsButton(this, {
@@ -114,6 +118,12 @@ export class GameOverScene extends Phaser.Scene {
       alpha: 0.78,
       ...getMenuMasterMutePosition(gearPos),
     });
+    if (
+      this.textures.exists(ASSET_KEYS.uiSoundOn) ||
+      this.textures.exists(ASSET_KEYS.uiSoundOff)
+    ) {
+      this.masterMuteButton.refreshIcon();
+    }
     this.bottomToast = new GameplayBottomToast(this);
 
     const { isNewBestScore, isNewLongestTime } = recordPersonalRun(
@@ -142,6 +152,9 @@ export class GameOverScene extends Phaser.Scene {
     const buttonReserveTop = this.getButtonAreaTop(data.outcome);
     if (data.outcome === 'passed' || data.outcome === 'passedWithMoonflower') {
       contentY += PASSED_SCORE_CARD_OFFSET_Y;
+    }
+    if (data.outcome === 'passedWithMoonflower') {
+      contentY -= MOONFLOWER_PASSED_SCORE_CARD_LIFT_Y;
     }
     contentY = this.fitScoreCard(
       cx,
@@ -422,6 +435,13 @@ export class GameOverScene extends Phaser.Scene {
     return this.scoreCard.bottom + SECTION_GAP;
   }
 
+  private startRetryGame(): void {
+    resetGameplayPointerSuppress();
+    this.soundManager.resumeGameplaySfx();
+    this.soundManager.tryUnlock();
+    this.scene.start(SCENE_KEYS.game);
+  }
+
   private createFailedButtons(cx: number): void {
     const retryY = GAME_HEIGHT - 168;
     const menuY = GAME_HEIGHT - 58;
@@ -437,10 +457,7 @@ export class GameOverScene extends Phaser.Scene {
         displayWidth: RETRY_BTN_WIDTH,
         autoFloat: false,
         interactive: true,
-        onClick: () => {
-          this.soundManager.tryUnlock();
-          this.scene.start(SCENE_KEYS.game);
-        },
+        onClick: () => this.startRetryGame(),
       },
     );
 
@@ -464,10 +481,7 @@ export class GameOverScene extends Phaser.Scene {
         autoFloat: false,
         floatPhaseMs: 0,
         interactive: true,
-        onClick: () => {
-          this.soundManager.tryUnlock();
-          this.scene.start(SCENE_KEYS.game);
-        },
+        onClick: () => this.startRetryGame(),
       },
     );
 
@@ -537,6 +551,8 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    hidePlayerNameOverlay();
+    this.musicManager?.clearPlaybackInterruptions();
     this.settingsDrawer?.destroy();
     this.settingsButton?.destroy();
     this.masterMuteButton?.destroy();

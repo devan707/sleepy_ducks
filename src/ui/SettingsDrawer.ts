@@ -86,6 +86,10 @@ export class SettingsDrawer {
     return true;
   }
 
+  static resetSuppress(): void {
+    SettingsDrawer.suppressScenePointer = false;
+  }
+
   private scene: Phaser.Scene;
   private opts: SettingsDrawerOptions;
   private root: Phaser.GameObjects.Container;
@@ -102,6 +106,11 @@ export class SettingsDrawer {
   private panelMask: Phaser.Display.Masks.GeometryMask | null = null;
   private footerLink!: Phaser.GameObjects.Container;
   private howToPlayLink: Phaser.GameObjects.Container | null = null;
+  private panelSlideTween: Phaser.Tweens.Tween | null = null;
+  /** Cancels a pending deferred onClose when the drawer reopens. */
+  private closeGeneration = 0;
+  /** True after onOpen until onClose has been delivered. */
+  private awaitingCloseCallback = false;
 
   constructor(scene: Phaser.Scene, opts: SettingsDrawerOptions) {
     this.scene = scene;
@@ -136,6 +145,7 @@ export class SettingsDrawer {
 
   open(): void {
     if (this.visible) return;
+    this.closeGeneration += 1;
     this.visible = true;
     SettingsDrawer.suppressScenePointer = true;
     this.root.setVisible(true);
@@ -146,6 +156,7 @@ export class SettingsDrawer {
     this.refreshCharmsSection();
     this.repositionNameOverlay();
     this.opts.onOpen?.();
+    this.awaitingCloseCallback = true;
 
     this.scaleResizeHandler = () => {
       if (this.visible) {
@@ -156,7 +167,8 @@ export class SettingsDrawer {
     };
     this.scene.scale.on('resize', this.scaleResizeHandler);
 
-    this.scene.tweens.add({
+    this.panelSlideTween?.stop();
+    this.panelSlideTween = this.scene.tweens.add({
       targets: this.panel,
       x: this.panelXOpen,
       duration: 280,
@@ -176,17 +188,25 @@ export class SettingsDrawer {
     if (!this.visible) return;
     this.visible = false;
     hidePlayerNameOverlay();
+    this.panelSlideTween?.stop();
+    this.panelSlideTween = null;
     if (this.scaleResizeHandler) {
       this.scene.scale.off('resize', this.scaleResizeHandler);
       this.scaleResizeHandler = null;
     }
-    this.opts.onClose?.();
+
+    const closeGen = this.closeGeneration;
+    const finishClose = (): void => {
+      if (closeGen !== this.closeGeneration || this.visible) return;
+      this.emitClose();
+    };
 
     this.scene.tweens.add({
       targets: this.panel,
       x: this.panelXClosed,
       duration: 240,
       ease: 'Cubic.easeIn',
+      onComplete: finishClose,
     });
     this.scene.tweens.add({
       targets: this.backdrop,
@@ -203,8 +223,18 @@ export class SettingsDrawer {
     else this.open();
   }
 
+  private emitClose(): void {
+    if (!this.awaitingCloseCallback) return;
+    this.awaitingCloseCallback = false;
+    this.opts.onClose?.();
+  }
+
   destroy(): void {
     hidePlayerNameOverlay();
+    this.closeGeneration += 1;
+    this.emitClose();
+    this.panelSlideTween?.stop();
+    this.panelSlideTween = null;
     if (this.scaleResizeHandler) {
       this.scene.scale.off('resize', this.scaleResizeHandler);
       this.scaleResizeHandler = null;
@@ -402,7 +432,7 @@ export class SettingsDrawer {
       this.howToPlayLink = this.createFooterLink(
         DRAWER_LAYOUT.howToPlayFooterY,
         'How to Play',
-        () => this.opts.onOpenRules?.(),
+        () => this.openRules(true),
         '#ffe566',
         '#fff8c8',
         '19px',
@@ -419,12 +449,7 @@ export class SettingsDrawer {
       this.footerLink = this.createFooterLink(
         DRAWER_LAYOUT.footerY,
         'How to Play',
-        () => {
-          this.close();
-          this.scene.time.delayedCall(260, () => {
-            this.scene.scene.start(SCENE_KEYS.rules);
-          });
-        },
+        () => this.openRules(false),
         '#ffe566',
         '#fff8c8',
         '19px',
@@ -497,6 +522,19 @@ export class SettingsDrawer {
     });
     this.panel.add(grid);
     this.charmsNodes.push(grid);
+  }
+
+  private openRules(returnToGame: boolean): void {
+    hidePlayerNameOverlay();
+    if (returnToGame) {
+      this.opts.onOpenRules?.();
+      return;
+    }
+
+    this.close();
+    this.scene.time.delayedCall(260, () => {
+      this.scene.scene.start(SCENE_KEYS.rules);
+    });
   }
 
   private resumeMusicContext(): void {

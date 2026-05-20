@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ROCK_OBSTACLES, type RockObstacleId } from '../config/gameConfig';
 import { rockAnimKeyForId, rockAtlasKeyForId } from '../config/rockAssets';
+import { createRockSprayEmitters, createRockStreakEmitters } from '../effects/ParticleEffects';
 
 export interface RockObstacleBounds {
   id: RockObstacleId;
@@ -42,6 +43,8 @@ function resolveRockObstacle(
 export class WaterfallRocks {
   readonly obstacles: readonly RockObstacleBounds[];
   private sprites: Phaser.GameObjects.Sprite[] = [];
+  private sprayEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
+  private streakEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.obstacles = ROCK_OBSTACLES.placements.map(resolveRockObstacle);
@@ -66,6 +69,23 @@ export class WaterfallRocks {
       }
 
       this.sprites.push(sprite);
+    }
+
+    this.sprayEmitters = createRockSprayEmitters(scene, this.obstacles);
+    this.streakEmitters = createRockStreakEmitters(scene, this.obstacles);
+  }
+
+  /** Clip rock flank spray to the pool side of the lip. */
+  setSprayMask(mask: Phaser.Display.Masks.GeometryMask): void {
+    for (const emitter of this.sprayEmitters) {
+      emitter.setMask(mask);
+    }
+  }
+
+  /** Clip rock streak sheets to the falls column (lip → foot). */
+  setStreakMask(mask: Phaser.Display.Masks.GeometryMask): void {
+    for (const emitter of this.streakEmitters) {
+      emitter.setMask(mask);
     }
   }
 
@@ -96,6 +116,14 @@ export class WaterfallRocks {
   }
 
   destroy(): void {
+    for (const emitter of this.sprayEmitters) {
+      emitter.destroy();
+    }
+    this.sprayEmitters = [];
+    for (const emitter of this.streakEmitters) {
+      emitter.destroy();
+    }
+    this.streakEmitters = [];
     for (const sprite of this.sprites) {
       sprite.destroy();
     }

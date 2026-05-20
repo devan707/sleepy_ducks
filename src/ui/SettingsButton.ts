@@ -51,6 +51,10 @@ export class SettingsButton {
     return true;
   }
 
+  static resetSuppress(): void {
+    SettingsButton.suppressScenePointer = false;
+  }
+
   /** True when a gameplay tap lands on the settings gear (exclude from empty-tap penalty). */
   static hitsWorldPoint(worldX: number, worldY: number): boolean {
     const pos = getDefaultSettingsButtonPosition();

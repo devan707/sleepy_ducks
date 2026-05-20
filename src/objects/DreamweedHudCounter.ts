@@ -28,13 +28,13 @@ export class DreamweedHudCounter {
     this.icon.setDisplaySize(this.displayW, this.displayH);
 
     this.countLabel = scene.add
-      .text(this.displayW * 0.42, 0, '0', lilitaDisplayStyle({
-        fontSize: '16px',
+      .text(5, 4, '0', lilitaDisplayStyle({
+        fontSize: '15px',
         color: '#ecf8ff',
         stroke: '#1a0e08',
         strokeThickness: 3,
       }))
-      .setOrigin(0, 0.5);
+      .setOrigin(0.5, 0.5);
 
     this.root.add([this.icon, this.countLabel]);
     this.root.setVisible(false);
