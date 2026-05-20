@@ -5,6 +5,7 @@ import { registerDuckAnimations } from '../assets/DuckAnimations';
 import { ASSET_KEYS } from '../config/assets';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
+import { ensureAppActive } from '../audio/appAudioLifecycle';
 import { SettingsButton, getDefaultSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
 import { MasterMuteButton, getGameMasterMutePosition } from '../ui/MasterMuteButton';
@@ -148,6 +149,10 @@ export class GameScene extends Phaser.Scene {
   private initRound(): void {
     clearEnvironmentGeometryOverride();
     this.isGameOver = false;
+    this.settingsPaused = false;
+    this.leavingViaSettings = false;
+    this.viewingRulesFromSettings = false;
+    this.calibrationMode = false;
     this.score = 0;
     this.lives = MAX_LIVES;
     this.goldenEggSaves = 0;
@@ -290,6 +295,7 @@ export class GameScene extends Phaser.Scene {
       this.dreamweedController.setEnabled(false);
       this.stage.enterCalibrationMode();
     } else {
+      ensureAppActive(this.game);
       this.spawner.start();
       this.dreamweedController.start();
       this.showRunStartBanner();

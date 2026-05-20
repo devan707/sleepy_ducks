@@ -282,6 +282,7 @@ export class MusicManager {
    */
   tryUnlock(): void {
     if (!this.musicEnabled) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
     if (!this.activeTrack) this.activeTrack = 'menuUi';
     this.play(this.activeTrack);
   }

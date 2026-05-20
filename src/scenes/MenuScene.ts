@@ -4,6 +4,7 @@ import { loadGameAssets } from '../assets/GameAssetLoader';
 import { ASSET_KEYS } from '../config/assets';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
+import { ensureAppActive } from '../audio/appAudioLifecycle';
 import { SettingsButton, getMenuSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
 import { FloatingAnimButton } from '../ui/FloatingAnimButton';
@@ -54,6 +55,7 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     this.starting = false;
+    ensureAppActive(this.game);
     this.cameras.main.setBackgroundColor('#1a3a4a');
     this.soundManager = SoundManager.forScene(this);
     this.musicManager = MusicManager.getInstance();

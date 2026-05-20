@@ -4,6 +4,7 @@ import { registerMoonflowerAnimations } from '../assets/MoonflowerAnimations';
 import { registerZzzAnimations } from '../assets/ZzzAnimations';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
+import { ensureAppActive } from '../audio/appAudioLifecycle';
 import { SettingsButton, getMenuSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
 import { FloatingAnimButton } from '../ui/FloatingAnimButton';
@@ -87,6 +88,7 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(data: GameOverData): void {
+    ensureAppActive(this.game);
     this.cameras.main.setBackgroundColor('#1a3a4a');
     this.soundManager = SoundManager.forScene(this);
     this.musicManager = MusicManager.getInstance();

@@ -887,6 +887,11 @@ export class SoundManager {
   }
 
   private refreshBackgroundPlayback(): void {
+    if (typeof document !== 'undefined' && document.hidden) {
+      this.pauseGameplayBackground();
+      return;
+    }
+
     for (const track of this.backgroundTracks) {
       const { clip, peak } = track;
       const targetVolume = this.getBackgroundTargetVolume(peak);
