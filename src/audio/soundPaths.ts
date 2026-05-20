@@ -12,3 +12,15 @@ export const WAKE_QUACK_URLS: readonly string[] = WAKE_QUACK_FILES.map(
 
 /** Golden duck wake SFX. */
 export const GOLDEN_WAKE_URL = SOUNDFX_BASE + encodeURIComponent('golden.mp3');
+
+/**
+ * Looping ambient beds that play during gameplay. `peak` is the maximum
+ * fraction of the file's original volume when the SFX slider is at 100%.
+ */
+export const GAMEPLAY_BACKGROUND_LOOPS: ReadonlyArray<{
+  url: string;
+  peak: number;
+}> = [
+  { url: SOUNDFX_BASE + encodeURIComponent('river.mp3'), peak: 0.3 },
+  { url: SOUNDFX_BASE + encodeURIComponent('waterfall.mp3'), peak: 0.2 },
+];

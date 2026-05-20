@@ -1,4 +1,18 @@
-import { DECOY_SPAWN, DIFFICULTY, COMBO } from '../config/gameConfig';
+import {
+  DECOY_SPAWN,
+  DIFFICULTY,
+  COMBO,
+  DUCK_SPAWN,
+  DUCK_SPAWN_PROFILES,
+  type DuckKind,
+  type DuckSex,
+} from '../config/gameConfig';
+
+export type MallardSpawnProfile = {
+  sex: DuckSex;
+  kind: Exclude<DuckKind, 'golden' | 'decoy'>;
+  weight: number;
+};
 
 export interface MotionDifficulty {
   crestDurationMs: number;
@@ -30,6 +44,14 @@ function tailRamp(
 ): number {
   const tailT = Phaser.Math.Clamp((elapsedSec - rampEndSec) / tailSec, 0, 1);
   return Phaser.Math.Linear(startValue, endValue, tailT);
+}
+
+function getLatestLateSpike(elapsedSec: number): (typeof DIFFICULTY.lateSpikes)[number] | null {
+  let latest: (typeof DIFFICULTY.lateSpikes)[number] | null = null;
+  for (const spike of DIFFICULTY.lateSpikes) {
+    if (elapsedSec >= spike.atSec) latest = spike;
+  }
+  return latest;
 }
 
 export class DifficultyManager {
@@ -136,18 +158,20 @@ export class DifficultyManager {
     }
 
     const tailStart = spawnIntervalByStep[spawnIntervalByStep.length - 1];
-    return Math.round(
-      Math.max(
+    const interval = Math.round(
+      tailRamp(
+        this.elapsedSec,
+        intensityRampSec,
+        tailStart,
         minSpawnInterval,
-        tailRamp(
-          this.elapsedSec,
-          intensityRampSec,
-          tailStart,
-          minSpawnInterval,
-          postRampSpawnIntervalSec,
-        ),
+        postRampSpawnIntervalSec,
       ),
     );
+    const spike = getLatestLateSpike(this.elapsedSec);
+    if (spike) {
+      return Math.min(interval, spike.spawnIntervalMs);
+    }
+    return Math.max(minSpawnInterval, interval);
   }
 
   getMaxConcurrent(): number {
@@ -164,7 +188,50 @@ export class DifficultyManager {
       );
     }
 
-    return maxConcurrentByStep[maxConcurrentByStep.length - 1];
+    const base = maxConcurrentByStep[maxConcurrentByStep.length - 1];
+    const spike = getLatestLateSpike(this.elapsedSec);
+    return spike ? Math.max(base, spike.maxConcurrent) : base;
+  }
+
+  /** Total heavy-sleeper share among mallard spawns (0–1), ramped over the first minute. */
+  getHeavySpawnShare(): number {
+    const { intensityStepSec, intensityRampSec, heavyShareByStep } =
+      DUCK_SPAWN.heavyShareRamp;
+    return sampleSteppedRamp(
+      this.elapsedSec,
+      heavyShareByStep,
+      intensityStepSec,
+      intensityRampSec,
+    );
+  }
+
+  /** Mallard spawn weights for the current run time (sums to 1). */
+  getMallardSpawnProfiles(): MallardSpawnProfile[] {
+    const heavyShare = this.getHeavySpawnShare();
+    const baseHeavy = DUCK_SPAWN_PROFILES.filter((p) => p.kind === 'heavy').reduce(
+      (sum, p) => sum + p.weight,
+      0,
+    );
+    const baseNormal = 1 - baseHeavy;
+    const normalShare = 1 - heavyShare;
+
+    const profileWeight = (
+      sex: DuckSex,
+      kind: Exclude<DuckKind, 'golden' | 'decoy'>,
+    ): number => {
+      const base = DUCK_SPAWN_PROFILES.find((p) => p.sex === sex && p.kind === kind)!;
+      if (kind === 'heavy') {
+        return heavyShare * (base.weight / baseHeavy);
+      }
+      return normalShare * (base.weight / baseNormal);
+    };
+
+    return [
+      { sex: 'male', kind: 'normal', weight: profileWeight('male', 'normal') },
+      { sex: 'female', kind: 'normal', weight: profileWeight('female', 'normal') },
+      { sex: 'male', kind: 'heavy', weight: profileWeight('male', 'heavy') },
+      { sex: 'female', kind: 'heavy', weight: profileWeight('female', 'heavy') },
+    ];
   }
 
   /** Ms until the next decoy spawn attempt (separate from mallard schedule). */

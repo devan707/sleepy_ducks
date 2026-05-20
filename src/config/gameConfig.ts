@@ -104,6 +104,12 @@ export const DUCK_SPAWN = {
   maxHeavyStreak: 2,
   /** Max same-sex mallards in a row within one bag (when mix allows). */
   maxSexStreak: 4,
+  /** Heavy share ramps from rare at 0s to common by 60s (sex ratios within each kind preserved). */
+  heavyShareRamp: {
+    intensityStepSec: 10,
+    intensityRampSec: 60,
+    heavyShareByStep: [0.05, 0.08, 0.12, 0.16, 0.20, 0.24, 0.30] as const,
+  },
 } as const;
 
 /** Decoys use a separate spawn clock — never mixed into the mallard schedule. */
@@ -267,7 +273,7 @@ export const DAY_NIGHT = {
   gameplayNightMusicFadeInStartSec: 45,
   gameplayNightMusicFadeInEndSec: 50,
   /** Night track begins at this offset (seconds into the loop). */
-  gameplayNightStartSec: 32,
+  gameplayNightStartSec: 30,
   sunDisplayHeight: 96,
   /** Screen X for sun path (right side of sky). */
   sunX: GAME_WIDTH * 0.68,
@@ -337,6 +343,12 @@ export const DIFFICULTY = {
   initialSpawnCount: 2,
   /** After 60s, spawn interval eases down to minSpawnInterval over this duration. */
   postRampSpawnIntervalSec: 90,
+  /** Extra mallard pressure at 1:20, 1:40, and 2:00 (applies for the rest of the run). */
+  lateSpikes: [
+    { atSec: 80, spawnIntervalMs: 470, maxConcurrent: 8 },
+    { atSec: 100, spawnIntervalMs: 360, maxConcurrent: 10 },
+    { atSec: 120, spawnIntervalMs: 200, maxConcurrent: 12 },
+  ] as const,
 } as const;
 
 export const DUCK = {

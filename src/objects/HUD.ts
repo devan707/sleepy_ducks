@@ -27,7 +27,7 @@ const HEART_SIZE = 24;
 const HEART_GAP = 5;
 const EGG_BELOW_HEARTS = 10;
 const PANEL_FILL = 0x0a2230;
-const PANEL_ALPHA = 0.72;
+const PANEL_ALPHA = 0.38;
 
 export class HUD {
   private scene: Phaser.Scene;
@@ -123,7 +123,7 @@ export class HUD {
     g.clear();
     g.fillStyle(PANEL_FILL, PANEL_ALPHA);
     g.fillRoundedRect(panelX, panelY, panelW, panelH, scorePanelRadius);
-    g.lineStyle(1.5, 0xffffff, 0.14);
+    g.lineStyle(1.5, 0xffffff, 0.08);
     g.strokeRoundedRect(panelX, panelY, panelW, panelH, scorePanelRadius);
   }
 

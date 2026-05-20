@@ -22,6 +22,16 @@ import {
   hideInstallPromptBanner,
   showInstallPromptBanner,
 } from '../ui/installPromptBanner';
+import {
+  applySceneScale,
+  getSceneCropInsets,
+  insetFromRight,
+  insetFromTop,
+  isCoverLayoutActive,
+  MENU_BOTTOM_EXTRA_LIFT,
+  MENU_GEAR_DOWN_NUDGE,
+  yFromBottom,
+} from '../scale/displayScale';
 
 const DEPTH = {
   bg: 0,
@@ -50,6 +60,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    applySceneScale(this.game, 'cover');
+    const crop = getSceneCropInsets(this);
+
     this.starting = false;
     this.cameras.main.setBackgroundColor('#1a3a4a');
     this.soundManager = SoundManager.forScene(this);
@@ -66,7 +79,8 @@ export class MenuScene extends Phaser.Scene {
     this.settingsButton = new SettingsButton(this, {
       drawer: this.settingsDrawer,
       depth: DEPTH.ui + 5,
-      ...getMenuSettingsButtonPosition(),
+      alpha: 0.78,
+      ...this.getMenuSettingsPosition(crop),
     });
     if (this.textures.exists(ASSET_KEYS.uiGear)) {
       this.settingsButton.refreshGearGraphic();
@@ -74,10 +88,10 @@ export class MenuScene extends Phaser.Scene {
 
     this.createBackground();
     addVerticalVignettes(this, DEPTH.vignette);
-    this.createTitleBlock();
-    this.createPlayButton();
-    this.createRulesLink();
-    this.createLoadOverlay();
+    this.createTitleBlock(crop);
+    this.createPlayButton(crop);
+    this.createRulesLink(crop);
+    this.createLoadOverlay(crop);
     this.setupInput();
     this.playEntrance();
     this.gameReady = AssetManager.hasRealGameplayArt();
@@ -97,9 +111,24 @@ export class MenuScene extends Phaser.Scene {
     }
   }
 
-  private createTitleBlock(): void {
+  private getMenuSettingsPosition(crop: ReturnType<typeof getSceneCropInsets>): {
+    x: number;
+    y: number;
+  } {
+    const base = getMenuSettingsButtonPosition();
+    return {
+      x: insetFromRight(base.x, crop.right),
+      y: insetFromTop(base.y, crop.top) + MENU_GEAR_DOWN_NUDGE,
+    };
+  }
+
+  private menuBottomLift(): number {
+    return isCoverLayoutActive(this.game) ? MENU_BOTTOM_EXTRA_LIFT : 0;
+  }
+
+  private createTitleBlock(crop: ReturnType<typeof getSceneCropInsets>): void {
     const cx = GAME_WIDTH / 2;
-    const logoY = 92;
+    const logoY = insetFromTop(92, crop.top);
 
     this.titleLogo = this.add.image(cx, logoY, ASSET_KEYS.titleLogo);
     const targetW = GAME_WIDTH * 0.88;
@@ -161,31 +190,31 @@ export class MenuScene extends Phaser.Scene {
       .setScrollFactor(0);
   }
 
-  private createPlayButton(): void {
+  private createPlayButton(crop: ReturnType<typeof getSceneCropInsets>): void {
     this.playButton = new FloatingAnimButton(
       this,
       GAME_WIDTH / 2,
-      GAME_HEIGHT - 112,
+      yFromBottom(112 + this.menuBottomLift(), crop.bottom),
       ASSET_KEYS.uiPlay,
       null,
       { depth: DEPTH.ui, displayWidth: PLAY_BTN_WIDTH, autoFloat: false },
     );
   }
 
-  private createRulesLink(): void {
+  private createRulesLink(crop: ReturnType<typeof getSceneCropInsets>): void {
     createTextLink(
       this,
       GAME_WIDTH / 2,
-      GAME_HEIGHT - 192,
+      yFromBottom(192 + this.menuBottomLift(), crop.bottom),
       'How to play →',
       () => this.scene.start(SCENE_KEYS.rules),
       DEPTH.ui,
     );
   }
 
-  private createLoadOverlay(): void {
+  private createLoadOverlay(crop: ReturnType<typeof getSceneCropInsets>): void {
     const cx = GAME_WIDTH / 2;
-    const cy = GAME_HEIGHT - 112;
+    const cy = yFromBottom(112 + this.menuBottomLift(), crop.bottom);
 
     this.add
       .rectangle(cx, cy, 280, 88, 0x000000, 0)
@@ -262,6 +291,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    applySceneScale(this.game, 'fit');
     this.clearInstallPromptSchedule();
     hideInstallPromptBanner();
     this.settingsDrawer?.destroy();

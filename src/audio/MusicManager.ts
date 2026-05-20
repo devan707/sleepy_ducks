@@ -14,6 +14,17 @@ import {
 
 export type MusicTrack = 'menuUi' | 'gameplay' | 'gameplayNight' | 'gameOver';
 
+/**
+ * Per-track caps applied on top of the user's music slider — slider at 100%
+ * plays each track at this fraction of its source file's volume.
+ */
+const MUSIC_PEAKS: Record<MusicTrack, number> = {
+  menuUi: 0.5,
+  gameOver: 0.25,
+  gameplay: 0.6,
+  gameplayNight: 0.6,
+};
+
 let instance: MusicManager | null = null;
 
 export class MusicManager {
@@ -98,8 +109,15 @@ export class MusicManager {
     const clip = new Audio(url);
     clip.preload = 'auto';
     clip.loop = true;
-    clip.volume = getMusicVolume();
+    clip.volume = 0;
     return clip;
+  }
+
+  /** Effective playback volume for a single track given the current slider value. */
+  private trackVolume(track: MusicTrack): number {
+    const slider = getMusicVolume();
+    if (slider <= 0.001) return 0;
+    return Math.max(0, Math.min(1, slider * MUSIC_PEAKS[track]));
   }
 
   private getTrackStartSec(track: MusicTrack): number {
@@ -137,12 +155,12 @@ export class MusicManager {
   }
 
   private applyClipVolumes(): void {
+    const slider = getMusicVolume();
+    this.musicEnabled = slider > 0.001;
     if (this.isManagingGameplayCrossfade()) return;
-    const volume = getMusicVolume();
-    for (const clip of Object.values(this.clips)) {
-      clip.volume = volume;
+    for (const [key, clip] of Object.entries(this.clips) as [MusicTrack, HTMLAudioElement][]) {
+      clip.volume = this.trackVolume(key);
     }
-    this.musicEnabled = volume > 0.001;
   }
 
   getMusicVolume(): number {
@@ -247,9 +265,10 @@ export class MusicManager {
 
     const from = this.clips.gameplay;
     const to = this.clips.gameplayNight;
-    const targetVol = getMusicVolume();
+    const dayTargetVol = this.trackVolume('gameplay');
+    const nightTargetVol = this.trackVolume('gameplayNight');
     const dayFade = this.fadeT(elapsedSec, dayStart, dayEnd);
-    const dayVol = targetVol * (1 - dayFade);
+    const dayVol = dayTargetVol * (1 - dayFade);
 
     if (dayFade >= 1) {
       from.pause();
@@ -280,13 +299,13 @@ export class MusicManager {
     }
 
     const nightFade = this.fadeT(elapsedSec, nightStart, nightEnd);
-    to.volume = targetVol * nightFade;
+    to.volume = nightTargetVol * nightFade;
 
     if (nightFade >= 1) {
       from.pause();
       from.currentTime = 0;
-      from.volume = targetVol;
-      to.volume = targetVol;
+      from.volume = dayTargetVol;
+      to.volume = nightTargetVol;
       this.activeTrack = 'gameplayNight';
       this.gameplayNightCrossfaded = true;
       this.resetGameplayCrossfadeState();
@@ -328,6 +347,8 @@ export class MusicManager {
     if (previousTrack !== track) {
       this.seekTrackToStart(next, track);
     }
+
+    next.volume = this.trackVolume(track);
 
     const startPlayback = () => {
       if (this.activeTrack !== track || !this.musicEnabled) return;

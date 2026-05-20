@@ -5,9 +5,9 @@ import { getPlayerName, setPlayerName } from '../storage/playerName';
 /** Matches the name bubble in SettingsDrawer (game-space, relative to panel X). */
 export const PLAYER_NAME_FIELD = {
   x: 40,
-  y: 124,
+  y: 92,
   width: 238,
-  height: 32,
+  height: 36,
 } as const;
 
 let sharedInput: HTMLInputElement | null = null;
@@ -39,12 +39,23 @@ export function syncPlayerNameOverlayValue(): void {
   if (input) input.value = getPlayerName();
 }
 
-export function showPlayerNameOverlay(game: Phaser.Game, panelX: number): void {
+export function showPlayerNameOverlay(
+  game: Phaser.Game,
+  panelX: number,
+  panelY = 0,
+  panelScale = 1,
+): void {
   const input = getOrCreateInput();
   syncPlayerNameOverlayValue();
 
   const { x, y, width, height } = PLAYER_NAME_FIELD;
-  const rect = gameRectToScreen(game, panelX + x, y, width, height);
+  const rect = gameRectToScreen(
+    game,
+    panelX + x * panelScale,
+    panelY + y * panelScale,
+    width * panelScale,
+    height * panelScale,
+  );
 
   input.style.display = 'block';
   input.style.position = 'fixed';

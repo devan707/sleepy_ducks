@@ -27,10 +27,13 @@ async function loadSleepingDuckIcon() {
 }
 
 async function writeSquareIcon(input, size, outPath, format = 'png') {
-  let pipeline = sharp(input).resize(size, size, {
-    fit: 'contain',
-    background: ICON_BG,
-  });
+  const trimmed = await sharp(input).trim().toBuffer();
+  let pipeline = sharp(trimmed)
+    .resize(size, size, {
+      fit: 'cover',
+      position: 'centre',
+    })
+    .flatten({ background: ICON_BG });
 
   if (format === 'ico') {
     await pipeline.toFile(outPath);

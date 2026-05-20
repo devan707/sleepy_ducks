@@ -27,7 +27,7 @@ export class SpawnController {
   private timer: Phaser.Time.TimerEvent | null = null;
   private decoyTimer: Phaser.Time.TimerEvent | null = null;
   private goldenTimer: Phaser.Time.TimerEvent | null = null;
-  private readonly mallardMixer = new MallardSpawnMixer();
+  private readonly mallardMixer: MallardSpawnMixer;
 
   constructor(
     scene: Phaser.Scene,
@@ -41,6 +41,7 @@ export class SpawnController {
     this.ducks = ducks;
     this.layout = layout;
     this.waterfallStage = waterfallStage;
+    this.mallardMixer = new MallardSpawnMixer(this.difficulty);
   }
 
   start(): void {

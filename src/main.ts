@@ -10,6 +10,7 @@ import { RulesScene } from './scenes/RulesScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { initInstallPromptCapture } from './pwa/installPrompt';
 import { registerServiceWorker } from './pwa/registerServiceWorker';
+import { isMobilePhone } from './scale/displayScale';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -27,8 +28,9 @@ const config: Phaser.Types.Core.GameConfig = {
     smoothStep: true,
   },
   scale: {
-    mode: Phaser.Scale.FIT,
+    mode: isMobilePhone() ? Phaser.Scale.ENVELOP : Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    expandParent: isMobilePhone(),
   },
   input: {
     activePointers: 2,

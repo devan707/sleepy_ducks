@@ -10,6 +10,7 @@ import {
 } from '../config/assets';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
 import { LoadingBar } from '../ui/LoadingBar';
+import { applySceneScale } from '../scale/displayScale';
 
 const DEPTH = {
   bar: 1,
@@ -25,9 +26,11 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
+    applySceneScale(this.game, 'cover');
+
     AssetManager.reset();
     AssetManager.clearGameplayTextures(this);
-    this.cameras.main.setBackgroundColor(COLORS.waterDeep);
+    this.createGradientBackground();
 
     this.createLoadingUi();
 
@@ -73,6 +76,22 @@ export class PreloadScene extends Phaser.Scene {
     this.time.delayedCall(80, () => {
       this.scene.start(SCENE_KEYS.menu);
     });
+  }
+
+  private createGradientBackground(): void {
+    this.cameras.main.setBackgroundColor(COLORS.skyTop);
+    const bg = this.add.graphics().setDepth(0).setScrollFactor(0);
+    bg.fillGradientStyle(
+      COLORS.skyTop,
+      COLORS.skyTop,
+      COLORS.moss,
+      COLORS.mossLight,
+      1,
+      1,
+      1,
+      1,
+    );
+    bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
   }
 
   private createLoadingUi(): void {

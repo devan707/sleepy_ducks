@@ -21,8 +21,31 @@ import {
   showPlayerNameOverlay,
   syncPlayerNameOverlayValue,
 } from './playerNameOverlay';
+import { getDrawerLayout, DRAWER_PANEL_H, type DrawerLayout } from '../scale/displayScale';
 
 const DRAWER_W = 318;
+
+/** Tight vertical layout (panel-local coordinates). */
+const DRAWER_LAYOUT = {
+  titleY: 28,
+  closeBubbleX: DRAWER_W - 24 - 44,
+  closeBubbleY: 24,
+  closeBubbleSize: 44,
+  nameY: 64,
+  nameH: 56,
+  nameLabelY: 74,
+  musicY: 134,
+  volumeRowH: 64,
+  sfxY: 208,
+  bestsTitleY: 284,
+  bestsStartY: 328,
+  statCardH: 70,
+  statGap: 8,
+  emptyStatsH: 84,
+  charmsHeaderY: 480,
+  charmsGridY: 528,
+  footerY: 580,
+} as const;
 const SETTINGS_GOLD = 0xffe566;
 /** Settings panel shell — true blue (not pastel sky). */
 const SETTINGS_PANEL_BLUE = 0x3d7ec8;
@@ -32,8 +55,6 @@ const SETTINGS_BRIGHT_BLUE = 0x5eb4ea;
 const SETTINGS_PRIMARY_GREEN = COLORS.moss;
 /** Charms section header — lighter/brighter than cliff moss. */
 const SETTINGS_CHARMS_GREEN = 0x9ef8b0;
-const PANEL_X_CLOSED = GAME_WIDTH + 4;
-const PANEL_X_OPEN = GAME_WIDTH - DRAWER_W;
 
 export type SettingsDrawerMode = 'menu' | 'gameplay' | 'gameOver';
 
@@ -67,6 +88,12 @@ export class SettingsDrawer {
   private charmsNodes: Phaser.GameObjects.GameObject[] = [];
   private visible = false;
   private scaleResizeHandler: (() => void) | null = null;
+  private panelXOpen = GAME_WIDTH - DRAWER_W;
+  private panelXClosed = GAME_WIDTH + 4;
+  private panelLayoutScale = 1;
+  private panelMaskGfx: Phaser.GameObjects.Graphics | null = null;
+  private panelMask: Phaser.Display.Masks.GeometryMask | null = null;
+  private footerLink!: Phaser.GameObjects.Container;
 
   constructor(scene: Phaser.Scene, opts: SettingsDrawerOptions) {
     this.scene = scene;
@@ -86,10 +113,13 @@ export class SettingsDrawer {
     this.backdrop.setInteractive();
     this.backdrop.on('pointerdown', () => this.close());
 
-    this.panel = scene.add.container(PANEL_X_CLOSED, 0);
+    this.panel = scene.add.container(this.panelXClosed, 0);
     this.buildPanel();
+    this.syncPanelLayout(false);
 
     this.root.add([this.backdrop, this.panel]);
+    this.scene.game.scale.refresh();
+    this.scene.time.delayedCall(0, () => this.syncPanelLayout(false));
   }
 
   isOpen(): boolean {
@@ -101,6 +131,8 @@ export class SettingsDrawer {
     this.visible = true;
     SettingsDrawer.suppressScenePointer = true;
     this.root.setVisible(true);
+    this.scene.game.scale.refresh();
+    this.syncPanelLayout(false);
     this.refreshPersonalBests();
     syncPlayerNameOverlayValue();
     this.refreshCharmsSection();
@@ -108,13 +140,17 @@ export class SettingsDrawer {
     this.opts.onOpen?.();
 
     this.scaleResizeHandler = () => {
-      if (this.visible) this.repositionNameOverlay();
+      if (this.visible) {
+        this.syncPanelLayout(true);
+        this.refreshCharmsSection();
+        this.repositionNameOverlay();
+      }
     };
     this.scene.scale.on('resize', this.scaleResizeHandler);
 
     this.scene.tweens.add({
       targets: this.panel,
-      x: PANEL_X_OPEN,
+      x: this.panelXOpen,
       duration: 280,
       ease: 'Cubic.easeOut',
       onUpdate: () => this.repositionNameOverlay(),
@@ -140,7 +176,7 @@ export class SettingsDrawer {
 
     this.scene.tweens.add({
       targets: this.panel,
-      x: PANEL_X_CLOSED,
+      x: this.panelXClosed,
       duration: 240,
       ease: 'Cubic.easeIn',
     });
@@ -165,24 +201,70 @@ export class SettingsDrawer {
       this.scene.scale.off('resize', this.scaleResizeHandler);
       this.scaleResizeHandler = null;
     }
+    this.panel.clearMask();
+    this.panelMaskGfx?.destroy();
+    this.panelMaskGfx = null;
+    this.panelMask = null;
     this.root.destroy();
   }
 
+  private syncPanelLayout(preserveOpenX: boolean): void {
+    const layout = getDrawerLayout(this.scene.game);
+    const wasOpen = this.visible;
+
+    this.panelXOpen = layout.panelXOpen;
+    this.panelXClosed = layout.panelXClosed;
+    this.panelLayoutScale = layout.panelScale;
+    this.panel.setScale(layout.panelScale);
+    this.panel.y = layout.panelY;
+    this.updatePanelMask(layout);
+
+    if (wasOpen && preserveOpenX) {
+      this.panel.x = layout.panelXOpen;
+    } else if (!wasOpen) {
+      this.panel.x = layout.panelXClosed;
+    }
+  }
+
+  private updatePanelMask(layout: DrawerLayout): void {
+    if (!layout.safeRect || layout.panelScale >= 0.999) {
+      this.panel.clearMask();
+      return;
+    }
+
+    const w = DRAWER_W * layout.panelScale;
+    const h = layout.panelHeight;
+    const x = this.panel.x;
+    const y = this.panel.y;
+
+    if (!this.panelMaskGfx) {
+      this.panelMaskGfx = this.scene.add.graphics().setScrollFactor(0).setVisible(false);
+      this.root.add(this.panelMaskGfx);
+      this.panelMask = this.panelMaskGfx.createGeometryMask();
+    }
+
+    this.panelMaskGfx.clear();
+    this.panelMaskGfx.fillStyle(0xffffff, 1);
+    this.panelMaskGfx.fillRect(x, y, w, h);
+    this.panel.setMask(this.panelMask!);
+  }
+
   private buildPanel(): void {
+    const h = DRAWER_PANEL_H;
     const panelBg = this.scene.add.graphics();
     panelBg.fillStyle(SETTINGS_PANEL_BLUE, 0.98);
-    panelBg.fillRoundedRect(0, 0, DRAWER_W, GAME_HEIGHT, { tl: 22, bl: 22, tr: 0, br: 0 });
-    drawBubbleRect(panelBg, 6, 8, DRAWER_W - 12, GAME_HEIGHT - 16, {
+    panelBg.fillRoundedRect(0, 0, DRAWER_W, h, { tl: 22, bl: 22, tr: 0, br: 0 });
+    drawBubbleRect(panelBg, 6, 8, DRAWER_W - 12, h - 16, {
       fill: SETTINGS_PANEL_BLUE_INNER,
       fillAlpha: 0.5,
       radius: 20,
       highlight: false,
     });
     panelBg.lineStyle(4, SETTINGS_GOLD, 0.92);
-    panelBg.strokeRoundedRect(0, 0, DRAWER_W, GAME_HEIGHT, { tl: 22, bl: 22, tr: 0, br: 0 });
+    panelBg.strokeRoundedRect(0, 0, DRAWER_W, h, { tl: 22, bl: 22, tr: 0, br: 0 });
 
     const panelHit = this.scene.add
-      .rectangle(DRAWER_W / 2, GAME_HEIGHT / 2, DRAWER_W, GAME_HEIGHT, 0x000000, 0)
+      .rectangle(DRAWER_W / 2, h / 2, DRAWER_W, h, 0x000000, 0)
       .setInteractive();
     panelHit.on('pointerdown', (p: Phaser.Input.Pointer) => {
       p.event?.stopPropagation();
@@ -190,7 +272,7 @@ export class SettingsDrawer {
     });
 
     const title = this.scene.add
-      .text(28, 48, 'Settings', {
+      .text(28, DRAWER_LAYOUT.titleY, 'Settings', {
         ...titleTextStyle({ fontSize: '26px', color: UI_CHROME.accentGold }),
         stroke: UI_CHROME.ink,
         strokeThickness: 7,
@@ -198,9 +280,22 @@ export class SettingsDrawer {
       .setOrigin(0, 0);
 
     const closeBubble = this.scene.add.graphics();
-    drawBubbleRect(closeBubble, DRAWER_W - 58, 42, 44, 44, { fill: 0x3a8cad, radius: 14 });
+    const cbSize = DRAWER_LAYOUT.closeBubbleSize;
+    drawBubbleRect(
+      closeBubble,
+      DRAWER_LAYOUT.closeBubbleX,
+      DRAWER_LAYOUT.closeBubbleY,
+      cbSize,
+      cbSize,
+      { fill: 0x3a8cad, radius: 14 },
+    );
     const closeBtn = this.scene.add
-      .text(DRAWER_W - 36, 64, '✕', outlinedTextStyle({ fontSize: '20px' }))
+      .text(
+        DRAWER_LAYOUT.closeBubbleX + cbSize / 2,
+        DRAWER_LAYOUT.closeBubbleY + cbSize / 2,
+        '✕',
+        outlinedTextStyle({ fontSize: '20px' }),
+      )
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     closeBtn.on('pointerdown', (p: Phaser.Input.Pointer) => {
@@ -210,19 +305,19 @@ export class SettingsDrawer {
     });
 
     const nameBubble = this.scene.add.graphics();
-    drawBubbleRect(nameBubble, 24, 100, DRAWER_W - 48, 52, {
+    drawBubbleRect(nameBubble, 24, DRAWER_LAYOUT.nameY, DRAWER_W - 48, DRAWER_LAYOUT.nameH, {
       fill: SETTINGS_BRIGHT_BLUE,
       radius: 16,
     });
     const nameLabel = this.scene.add
-      .text(40, 112, 'YOUR NAME', settingsLabelTextStyle({ fontSize: '11px', letterSpacing: 2 }))
+      .text(40, DRAWER_LAYOUT.nameLabelY, 'YOUR NAME', settingsLabelTextStyle({ fontSize: '11px', letterSpacing: 2 }))
       .setOrigin(0, 0);
 
     const musicRow = createBubbleVolumeSlider(this.scene, {
       x: 24,
-      y: 168,
+      y: DRAWER_LAYOUT.musicY,
       width: DRAWER_W - 48,
-      height: 64,
+      height: DRAWER_LAYOUT.volumeRowH,
       label: 'Music volume',
       backgroundFill: SETTINGS_BRIGHT_BLUE,
       initial01: getMusicVolume(),
@@ -239,9 +334,9 @@ export class SettingsDrawer {
 
     const sfxRow = createBubbleVolumeSlider(this.scene, {
       x: 24,
-      y: 242,
+      y: DRAWER_LAYOUT.sfxY,
       width: DRAWER_W - 48,
-      height: 64,
+      height: DRAWER_LAYOUT.volumeRowH,
       label: 'Sound effects',
       backgroundFill: SETTINGS_BRIGHT_BLUE,
       initial01: getSfxVolume(),
@@ -258,21 +353,21 @@ export class SettingsDrawer {
     });
 
     const bestsTitleBubble = this.scene.add.graphics();
-    drawBubbleRect(bestsTitleBubble, 24, 318, DRAWER_W - 48, 36, {
+    drawBubbleRect(bestsTitleBubble, 24, DRAWER_LAYOUT.bestsTitleY, DRAWER_W - 48, 36, {
       fill: SETTINGS_PRIMARY_GREEN,
       fillAlpha: 0.9,
       radius: 14,
     });
     const bestsTitle = this.scene.add
-      .text(DRAWER_W / 2, 336, 'YOUR PERSONAL BESTS', settingsLabelTextStyle({
+      .text(DRAWER_W / 2, DRAWER_LAYOUT.bestsTitleY + 18, 'YOUR PERSONAL BESTS', settingsLabelTextStyle({
         fontSize: '11px',
         letterSpacing: 2,
       }))
       .setOrigin(0.5);
 
     const charmsSection = this.buildCharmsSection();
-    const footerLink = this.createFooterLink(
-      GAME_HEIGHT - 44,
+    this.footerLink = this.createFooterLink(
+      DRAWER_LAYOUT.footerY,
       this.opts.mode === 'gameplay' ? 'Back to home →' : 'How to play →',
       () => {
         if (this.opts.mode === 'gameplay') {
@@ -299,7 +394,7 @@ export class SettingsDrawer {
       bestsTitleBubble,
       bestsTitle,
       ...charmsSection,
-      footerLink,
+      this.footerLink,
     ]);
 
     this.refreshPersonalBests();
@@ -307,7 +402,7 @@ export class SettingsDrawer {
   }
 
   private buildCharmsSection(): Phaser.GameObjects.GameObject[] {
-    const charmsY = 638;
+    const charmsY = DRAWER_LAYOUT.charmsHeaderY;
     const glowW = DRAWER_W - 48;
     const glowH = 44;
     const glowX = 24;
@@ -353,11 +448,11 @@ export class SettingsDrawer {
     }
     this.charmsNodes = [];
 
-    const gridY = 718;
+    const gridY = DRAWER_LAYOUT.charmsGridY;
     const grid = new CharmsGrid(this.scene, {
       centerX: DRAWER_W / 2,
       centerY: gridY,
-      scale: 1,
+      scale: 0.92,
       showLocked: true,
       bareRow: true,
     });
@@ -427,7 +522,12 @@ export class SettingsDrawer {
       hidePlayerNameOverlay();
       return;
     }
-    showPlayerNameOverlay(this.scene.game, this.panel.x);
+    showPlayerNameOverlay(
+      this.scene.game,
+      this.panel.x,
+      this.panel.y,
+      this.panelLayoutScale,
+    );
   }
 
   private refreshPersonalBests(): void {
@@ -437,19 +537,19 @@ export class SettingsDrawer {
     this.personalBestNodes = [];
 
     const bests = getPersonalBests();
-    const startY = 366;
+    const startY = DRAWER_LAYOUT.bestsStartY;
     const colW = (DRAWER_W - 48 - 10) / 2;
-    const cardH = 78;
-    const gap = 10;
+    const cardH = DRAWER_LAYOUT.statCardH;
+    const gap = DRAWER_LAYOUT.statGap;
 
     if (!hasAnyPersonalBests(bests)) {
       const emptyBubble = this.scene.add.graphics();
-      drawBubbleRect(emptyBubble, 24, startY, DRAWER_W - 48, 88, {
+      drawBubbleRect(emptyBubble, 24, startY, DRAWER_W - 48, DRAWER_LAYOUT.emptyStatsH, {
         fill: 0x3a8cad,
         radius: 18,
       });
       const empty = this.scene.add
-        .text(DRAWER_W / 2, startY + 44, 'Float downstream once\nto set your records!', {
+        .text(DRAWER_W / 2, startY + DRAWER_LAYOUT.emptyStatsH / 2, 'Float downstream once\nto set your records!', {
           ...outlinedTextStyle({ fontSize: '14px', color: '#e8f4fc' }),
           align: 'center',
           lineSpacing: 6,

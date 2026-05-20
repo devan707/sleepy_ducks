@@ -166,11 +166,11 @@ export function createBubbleVolumeSlider(
   });
 
   const labelText = scene.add
-    .text(14, 14, label, settingsLabelTextStyle({ fontSize: '16px', letterSpacing: 0 }))
+    .text(14, 10, label, settingsLabelTextStyle({ fontSize: '15px', letterSpacing: 0 }))
     .setOrigin(0, 0);
 
   const trackPad = 14;
-  const trackY = height - 28;
+  const trackY = height - 24;
   const trackW = width - trackPad * 2;
   const trackH = 10;
 
@@ -179,13 +179,13 @@ export function createBubbleVolumeSlider(
   const knob = scene.add.graphics();
 
   const pctText = scene.add
-    .text(width - trackPad - 58, 14, '', captionTextStyle({ fontSize: '11px' }))
+    .text(width - trackPad - 58, 10, '', captionTextStyle({ fontSize: '11px' }))
     .setOrigin(1, 0);
 
   const mutePill = scene.add.graphics();
   const muteText = scene.add
-    .text(width - trackPad - 6, 22, '', outlinedTextStyle({ fontSize: '11px' }))
-    .setOrigin(1, 0.5);
+    .text(0, 0, '', outlinedTextStyle({ fontSize: '11px', strokeThickness: 2 }))
+    .setOrigin(0.5);
 
   let value = Phaser.Math.Clamp(initial01, 0, 1);
   let savedVolume = value > 0.001 ? value : 0.42;
@@ -194,7 +194,7 @@ export function createBubbleVolumeSlider(
   const mutePillW = 46;
   const mutePillH = 22;
   const mutePillX = width - trackPad - mutePillW;
-  const mutePillY = 12;
+  const mutePillY = 8;
 
   const redrawMute = () => {
     mutePill.clear();
@@ -202,8 +202,14 @@ export function createBubbleVolumeSlider(
     mutePill.fillRoundedRect(mutePillX, mutePillY, mutePillW, mutePillH, mutePillH / 2);
     mutePill.lineStyle(2, 0xffffff, muted ? 0.45 : 0.65);
     mutePill.strokeRoundedRect(mutePillX, mutePillY, mutePillW, mutePillH, mutePillH / 2);
+    muteText.setPosition(mutePillX + mutePillW / 2, mutePillY + mutePillH / 2);
     muteText.setText(muted ? 'OFF' : 'ON');
-    muteText.setColor(muted ? '#ffd0d0' : '#0a2218');
+    if (muted) {
+      muteText.setColor('#ffd0d0');
+    } else {
+      muteText.setColor(UI_CHROME.textPrimary);
+    }
+    muteText.setStroke(UI_CHROME.ink, 2);
   };
 
   const knobX = () => trackPad + value * trackW;

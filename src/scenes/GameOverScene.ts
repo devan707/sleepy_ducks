@@ -2,13 +2,25 @@ import Phaser from 'phaser';
 import { ASSET_KEYS } from '../config/assets';
 import { MusicManager } from '../audio/MusicManager';
 import { SoundManager } from '../audio/SoundManager';
-import { SettingsButton } from '../ui/SettingsButton';
+import { SettingsButton, getMenuSettingsButtonPosition } from '../ui/SettingsButton';
 import { SettingsDrawer } from '../ui/SettingsDrawer';
 import { FloatingAnimButton } from '../ui/FloatingAnimButton';
 import { COLORS, GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
 import type { GameOverData } from '../core/types';
 import { formatSurvivalTime } from '../models/RunStats';
 import { getHighScore, recordPersonalRun } from '../storage/personalBests';
+import {
+  applySceneScale,
+  GAME_OVER_BOTTOM_LIFT,
+  GAME_OVER_MENU_EXTRA_LIFT,
+  GAME_OVER_STATS_LIFT,
+  getSceneCropInsets,
+  insetFromRight,
+  insetFromTop,
+  isCoverLayoutActive,
+  MENU_GEAR_DOWN_NUDGE,
+  yFromBottom,
+} from '../scale/displayScale';
 
 const DEPTH = {
   bg: 0,
@@ -17,10 +29,7 @@ const DEPTH = {
 } as const;
 
 const RETRY_BTN_WIDTH = 200;
-
-const BTN = {
-  menu: { key: 'ui-gameover-menu', width: 200, height: 44, fill: 0x34495e, label: 'MENU' },
-} as const;
+const BACK_HOME_LABEL = '← Back to Home';
 
 export class GameOverScene extends Phaser.Scene {
   private soundManager!: SoundManager;
@@ -35,6 +44,9 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(data: GameOverData): void {
+    applySceneScale(this.game, 'cover');
+    const crop = getSceneCropInsets(this);
+
     this.cameras.main.setBackgroundColor('#1a3a4a');
     this.soundManager = SoundManager.forScene(this);
     this.musicManager = MusicManager.getInstance();
@@ -50,6 +62,8 @@ export class GameOverScene extends Phaser.Scene {
     this.settingsButton = new SettingsButton(this, {
       drawer: this.settingsDrawer,
       depth: DEPTH.ui + 5,
+      alpha: 0.78,
+      ...this.getGameOverSettingsPosition(crop),
     });
 
     const { isNewBestScore, isNewLongestTime } = recordPersonalRun(
@@ -63,11 +77,26 @@ export class GameOverScene extends Phaser.Scene {
 
     this.createBackground();
     this.createDarkOverlay();
-    this.createBanner(cx);
+    this.createBanner(cx, crop);
     this.createScorePanel(cx, data, high, isNewBestScore);
     this.createStats(cx, data, isNewLongestTime);
-    this.createButtons(cx);
+    this.createButtons(cx, crop);
     this.playEntrance();
+  }
+
+  private gameOverBottomLift(): number {
+    return isCoverLayoutActive(this.game) ? GAME_OVER_BOTTOM_LIFT : 0;
+  }
+
+  private getGameOverSettingsPosition(crop: ReturnType<typeof getSceneCropInsets>): {
+    x: number;
+    y: number;
+  } {
+    const base = getMenuSettingsButtonPosition();
+    return {
+      x: insetFromRight(base.x, crop.right),
+      y: insetFromTop(base.y, crop.top) + MENU_GEAR_DOWN_NUDGE,
+    };
   }
 
   private createBackground(): void {
@@ -98,8 +127,8 @@ export class GameOverScene extends Phaser.Scene {
     overlay.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
   }
 
-  private createBanner(cx: number): void {
-    const bannerY = 72;
+  private createBanner(cx: number, crop: ReturnType<typeof getSceneCropInsets>): void {
+    const bannerY = insetFromTop(72, crop.top);
     const targetW = GAME_WIDTH * 0.92;
 
     this.banner = this.add.image(cx, bannerY, ASSET_KEYS.gameOverBanner);
@@ -113,7 +142,8 @@ export class GameOverScene extends Phaser.Scene {
     high: number,
     isNewScore: boolean,
   ): void {
-    const panelTop = this.banner.y + this.banner.displayHeight + 28;
+    const lift = this.gameOverBottomLift();
+    const panelTop = this.banner.y + this.banner.displayHeight + 28 - (lift > 0 ? lift * 0.5 : 0);
     const panelH = isNewScore ? 118 : 88;
 
     const panel = this.add.graphics().setDepth(DEPTH.ui).setScrollFactor(0);
@@ -175,7 +205,9 @@ export class GameOverScene extends Phaser.Scene {
       color: '#d5e8ef',
     };
 
-    const statsTop = this.banner.y + this.banner.displayHeight + 168;
+    const lift = this.gameOverBottomLift();
+    const statsTop =
+      this.banner.y + this.banner.displayHeight + 168 - lift - (lift > 0 ? GAME_OVER_STATS_LIFT : 0);
     let y = statsTop;
     for (let i = 0; i < lines.length; i++) {
       this.add
@@ -201,59 +233,10 @@ export class GameOverScene extends Phaser.Scene {
     }
   }
 
-  private bakeButtonTexture(
-    textureKey: string,
-    label: string,
-    width: number,
-    height: number,
-    fill: number,
-  ): void {
-    if (this.textures.exists(textureKey)) {
-      this.textures.remove(textureKey);
-    }
-
-    const rt = this.make.renderTexture({ width, height }, false);
-    const radius = height / 2;
-
-    const bg = this.make.graphics({ x: 0, y: 0 }, false);
-    bg.fillStyle(fill, 0.92);
-    bg.fillRoundedRect(0, 0, width, height, radius);
-    bg.lineStyle(3, 0xffffff, 0.3);
-    bg.strokeRoundedRect(0, 0, width, height, radius);
-
-    const labelText = this.make.text({
-      x: width / 2,
-      y: height / 2,
-      text: label,
-      style: {
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: label.length > 8 ? '20px' : '18px',
-        fontStyle: 'bold',
-        color: '#ffffff',
-      },
-    });
-    labelText.setOrigin(0.5);
-
-    rt.draw(bg, 0, 0);
-    rt.draw(labelText, width / 2, height / 2);
-    rt.saveTexture(textureKey);
-
-    bg.destroy();
-    labelText.destroy();
-    rt.destroy();
-  }
-
-  private createButtons(cx: number): void {
-    this.bakeButtonTexture(
-      BTN.menu.key,
-      BTN.menu.label,
-      BTN.menu.width,
-      BTN.menu.height,
-      BTN.menu.fill,
-    );
-
-    const retryY = GAME_HEIGHT - 168;
-    const menuY = GAME_HEIGHT - 62;
+  private createButtons(cx: number, crop: ReturnType<typeof getSceneCropInsets>): void {
+    const bottomLift = this.gameOverBottomLift();
+    const retryY = yFromBottom(168 + bottomLift, crop.bottom);
+    const menuY = yFromBottom(62 + bottomLift + GAME_OVER_MENU_EXTRA_LIFT, crop.bottom);
 
     this.retryButton = new FloatingAnimButton(
       this,
@@ -273,14 +256,18 @@ export class GameOverScene extends Phaser.Scene {
       },
     );
 
-    const menuButton = this.add
-      .image(cx, menuY, BTN.menu.key)
+    const backHome = this.add
+      .text(cx, menuY, BACK_HOME_LABEL, {
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: '17px',
+        color: '#ffffff',
+      })
       .setOrigin(0.5)
       .setDepth(DEPTH.ui)
       .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
 
-    menuButton.on('pointerdown', () => {
+    backHome.on('pointerdown', () => {
       this.soundManager.tryUnlock();
       this.scene.start(SCENE_KEYS.menu);
     });
@@ -302,6 +289,7 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    applySceneScale(this.game, 'fit');
     this.settingsDrawer?.destroy();
     this.settingsButton?.destroy();
     this.retryButton?.destroy();

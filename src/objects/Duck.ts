@@ -524,10 +524,10 @@ export class Duck extends Phaser.GameObjects.Container {
   }
 
   private applyDepth(): void {
-    const depth = this.waterfallStage.getDuckDepth(
-      this.crestProgress,
-      this.motionPhase,
-    );
+    const depth =
+      this.lifecycle === 'escaping'
+        ? STAGE.duckDepthFront
+        : this.waterfallStage.getDuckDepth(this.crestProgress, this.motionPhase);
     if (depth === this.lastAppliedDepth) return;
     this.lastAppliedDepth = depth;
     this.setDepth(depth);

@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
-import { GOLDEN_WAKE_URL, WAKE_QUACK_URLS } from './soundPaths';
+import {
+  GAMEPLAY_BACKGROUND_LOOPS,
+  GOLDEN_WAKE_URL,
+  WAKE_QUACK_URLS,
+} from './soundPaths';
 import { COMBO } from '../config/gameConfig';
 import {
   getSfxVolume,
@@ -30,6 +34,11 @@ const WAKE_QUACK_HOLD_MS = 250;
 const WAKE_QUACK_FADE_MS = 250;
 const WAKE_QUACK_TOTAL_MS = 500;
 
+type BackgroundTrack = {
+  clip: HTMLAudioElement;
+  peak: number;
+};
+
 type FadeHandles = {
   hold: number;
   interval?: number;
@@ -53,6 +62,10 @@ export class SoundManager {
   private wakeFadeHandles: FadeHandles | null = null;
   private goldenFadeHandles: FadeHandles | null = null;
 
+  private readonly backgroundTracks: BackgroundTrack[] = [];
+  private backgroundActive = false;
+  private backgroundUnlockHandlersAttached = false;
+
   private constructor() {
     this.wakeClips = WAKE_QUACK_URLS.map((url) => {
       const clip = new Audio(url);
@@ -63,6 +76,14 @@ export class SoundManager {
     this.goldenWakeClip = new Audio(GOLDEN_WAKE_URL);
     this.goldenWakeClip.preload = 'auto';
     this.goldenWakeClip.loop = false;
+
+    for (const { url, peak } of GAMEPLAY_BACKGROUND_LOOPS) {
+      const clip = new Audio(url);
+      clip.preload = 'auto';
+      clip.loop = true;
+      clip.volume = 0;
+      this.backgroundTracks.push({ clip, peak });
+    }
   }
 
   static forScene(_scene: Phaser.Scene): SoundManager {
@@ -95,6 +116,7 @@ export class SoundManager {
     if (!this.sfxEnabled) {
       this.stopWakeClips();
     }
+    this.refreshBackgroundPlayback();
   }
 
   setSfxEnabled(enabled: boolean): void {
@@ -104,6 +126,7 @@ export class SoundManager {
     if (!this.sfxEnabled) {
       this.stopWakeClips();
     }
+    this.refreshBackgroundPlayback();
   }
 
   private scaledGain(gain: number): number {
@@ -619,7 +642,79 @@ export class SoundManager {
     this.play('tap');
   }
 
+  /** Begin (or resume) the gameplay ambient loops. Safe to call repeatedly. */
+  startGameplayBackground(): void {
+    this.backgroundActive = true;
+    this.attachBackgroundUnlock();
+    this.refreshBackgroundPlayback();
+  }
+
+  /** Pause loops while keeping `backgroundActive` so resume can restart them. */
+  pauseGameplayBackground(): void {
+    for (const { clip } of this.backgroundTracks) {
+      clip.pause();
+    }
+  }
+
+  resumeGameplayBackground(): void {
+    if (!this.backgroundActive) return;
+    this.refreshBackgroundPlayback();
+  }
+
+  /** Fully stop ambient loops (scene shutdown / quit). */
+  stopGameplayBackground(): void {
+    this.backgroundActive = false;
+    for (const { clip } of this.backgroundTracks) {
+      clip.pause();
+      clip.currentTime = 0;
+      clip.volume = 0;
+    }
+  }
+
+  private refreshBackgroundPlayback(): void {
+    for (const { clip, peak } of this.backgroundTracks) {
+      const targetVolume = this.sfxEnabled
+        ? Phaser.Math.Clamp(this.sfxVolume * peak, 0, 1)
+        : 0;
+      clip.volume = targetVolume;
+      const shouldPlay = this.backgroundActive && targetVolume > 0;
+      if (shouldPlay) {
+        if (clip.paused) {
+          const result = clip.play();
+          if (result) {
+            void result.catch(() => {
+              // Likely needs a user gesture — handled by the pointerdown unlock hook.
+            });
+          }
+        }
+      } else {
+        clip.pause();
+      }
+    }
+  }
+
+  /** Some browsers require a user gesture before audio can start; retry once on the next pointer. */
+  private attachBackgroundUnlock(): void {
+    if (this.backgroundUnlockHandlersAttached) return;
+    this.backgroundUnlockHandlersAttached = true;
+
+    const tryStart = () => {
+      if (!this.backgroundActive) return;
+      this.refreshBackgroundPlayback();
+      const stillBlocked = this.backgroundTracks.some(({ clip }) => clip.paused);
+      if (!stillBlocked) {
+        document.removeEventListener('pointerdown', tryStart, true);
+        document.removeEventListener('touchstart', tryStart, true);
+        this.backgroundUnlockHandlersAttached = false;
+      }
+    };
+
+    document.addEventListener('pointerdown', tryStart, { capture: true, passive: true });
+    document.addEventListener('touchstart', tryStart, { capture: true, passive: true });
+  }
+
   detach(): void {
     this.stopWakeClips();
+    this.stopGameplayBackground();
   }
 }

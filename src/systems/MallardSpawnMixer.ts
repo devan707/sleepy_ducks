@@ -5,12 +5,15 @@ import {
   type DuckKind,
   type DuckSex,
 } from '../config/gameConfig';
+import type { DifficultyManager, MallardSpawnProfile } from './DifficultyManager';
 import type { MallardSpawnPick } from './SpawnController';
 
 type MallardKind = Exclude<DuckKind, 'golden' | 'decoy'>;
 
 /** Long-run target rates derived from profile weights. */
-export function getDuckSpawnProbabilities(): {
+export function getDuckSpawnProbabilities(
+  profiles: readonly MallardSpawnProfile[] = DUCK_SPAWN_PROFILES,
+): {
   profiles: ReadonlyArray<{
     sex: DuckSex;
     kind: MallardKind;
@@ -22,22 +25,22 @@ export function getDuckSpawnProbabilities(): {
   normalPercent: number;
   heavyPercent: number;
 } {
-  const profiles = DUCK_SPAWN_PROFILES.map((p) => ({
+  const mapped = profiles.map((p) => ({
     sex: p.sex,
     kind: p.kind,
     weight: p.weight,
     percent: Math.round(p.weight * 1000) / 10,
   }));
 
-  const heavy = DUCK_SPAWN_PROFILES
+  const heavy = profiles
     .filter((p) => p.kind === 'heavy')
     .reduce((sum, p) => sum + p.weight, 0);
-  const female = DUCK_SPAWN_PROFILES
+  const female = profiles
     .filter((p) => p.sex === 'female')
     .reduce((sum, p) => sum + p.weight, 0);
 
   return {
-    profiles,
+    profiles: mapped,
     malePercent: Math.round((1 - female) * 1000) / 10,
     femalePercent: Math.round(female * 1000) / 10,
     normalPercent: Math.round((1 - heavy) * 1000) / 10,
@@ -51,21 +54,37 @@ export function getDuckSpawnProbabilities(): {
  */
 export class MallardSpawnMixer {
   private bag: MallardSpawnPick[] = [];
+  /** Heavy share when the current bag was built; rebuild when ramp moves. */
+  private lastBagHeavyShare = -1;
+
+  constructor(private readonly difficulty: DifficultyManager) {}
 
   pick(): MallardSpawnPick {
-    if (this.bag.length === 0) {
-      this.bag = buildShuffledSpawnBag(DUCK_SPAWN.bagSize);
+    const heavyShare = this.difficulty.getHeavySpawnShare();
+    if (
+      this.bag.length === 0 ||
+      Math.abs(heavyShare - this.lastBagHeavyShare) > 0.005
+    ) {
+      this.lastBagHeavyShare = heavyShare;
+      this.bag = buildShuffledSpawnBag(
+        DUCK_SPAWN.bagSize,
+        this.difficulty.getMallardSpawnProfiles(),
+      );
     }
     return this.bag.pop()!;
   }
 
   reset(): void {
     this.bag = [];
+    this.lastBagHeavyShare = -1;
   }
 }
 
-function buildShuffledSpawnBag(bagSize: number): MallardSpawnPick[] {
-  const slots = DUCK_SPAWN_PROFILES.map((profile) => ({
+function buildShuffledSpawnBag(
+  bagSize: number,
+  profiles: readonly MallardSpawnProfile[],
+): MallardSpawnPick[] {
+  const slots = profiles.map((profile) => ({
     pick: { sex: profile.sex, kind: profile.kind } satisfies MallardSpawnPick,
     exact: profile.weight * bagSize,
     count: Math.floor(profile.weight * bagSize),

@@ -30,6 +30,8 @@ export type SettingsButtonOptions = {
   depth: number;
   x?: number;
   y?: number;
+  /** 0–1 gear opacity (e.g. menu overlay). */
+  alpha?: number;
 };
 
 export class SettingsButton {
@@ -71,6 +73,9 @@ export class SettingsButton {
     this.gearGraphic = this.createGearGraphic(scene);
     this.container = scene.add.container(x, y, [this.gearGraphic, hit]);
     this.container.setDepth(opts.depth).setScrollFactor(0);
+    if (opts.alpha !== undefined) {
+      this.container.setAlpha(opts.alpha);
+    }
 
     hit.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       pointer.event?.stopPropagation();

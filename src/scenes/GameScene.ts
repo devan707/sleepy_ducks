@@ -22,6 +22,7 @@ import {
   STAGE,
 } from '../config/gameConfig';
 import { GameplayBottomToast } from '../ui/GameplayBottomToast';
+import { applySceneScale } from '../scale/displayScale';
 import { GameEvents } from '../core/GameEvents';
 import type { GameOverData } from '../core/types';
 import { burstSplash } from '../effects/ParticleEffects';
@@ -108,6 +109,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    applySceneScale(this.game, 'fit');
+
     if (!AssetManager.hasRealGameplayArt()) {
       const wait = this.add
         .text(this.scale.width / 2, this.scale.height / 2, 'Loading…', {
@@ -152,6 +155,7 @@ export class GameScene extends Phaser.Scene {
     const layout = this.stage.getLayout();
 
     this.soundManager = SoundManager.forScene(this);
+    this.soundManager.startGameplayBackground();
     this.musicManager = MusicManager.getInstance();
     this.musicManager.playGameplay();
     this.settingsDrawer = new SettingsDrawer(this, {
@@ -266,12 +270,14 @@ export class GameScene extends Phaser.Scene {
     this.spawner.stop();
     this.moonflowerController?.setEnabled(false);
     this.musicManager.pauseForInterruption();
+    this.soundManager.pauseGameplayBackground();
   }
 
   private applySettingsResume(): void {
     if (!this.settingsPaused) return;
     this.settingsPaused = false;
     this.musicManager.resumeFromInterruption();
+    this.soundManager.resumeGameplayBackground();
     if (!this.isGameOver && !this.calibrationMode) {
       this.moonflowerController?.setEnabled(true);
       this.spawner.start();
@@ -285,6 +291,7 @@ export class GameScene extends Phaser.Scene {
     this.settingsDrawer.close();
     this.musicManager.clearPlaybackInterruptions();
     this.musicManager.pauseAll();
+    this.soundManager.stopGameplayBackground();
     this.cameras.main.fadeOut(280, 0, 0, 0);
     this.time.delayedCall(280, () => {
       this.leavingViaSettings = false;
@@ -764,6 +771,7 @@ export class GameScene extends Phaser.Scene {
     this.lifeLossCooldown = true;
     this.events.emit(GameEvents.GAME_OVER);
     this.spawner.stop();
+    this.soundManager.stopGameplayBackground();
     this.soundManager.play('gameOver');
 
     const data: GameOverData = {

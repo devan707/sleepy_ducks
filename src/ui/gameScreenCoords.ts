@@ -1,5 +1,29 @@
-import type Phaser from 'phaser';
+import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH } from '../config/gameConfig';
+
+type GameToScreenTransform = {
+  rect: DOMRect;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+};
+
+/** Uniform scale + centering offset for FIT / ENVELOP canvas modes. */
+function getGameToScreenTransform(game: Phaser.Game): GameToScreenTransform {
+  const rect = game.canvas.getBoundingClientRect();
+  const sx = rect.width / GAME_WIDTH;
+  const sy = rect.height / GAME_HEIGHT;
+  const envelop = game.scale.scaleMode === Phaser.Scale.ENVELOP;
+  const scale = envelop ? Math.max(sx, sy) : Math.min(sx, sy);
+  const renderedW = GAME_WIDTH * scale;
+  const renderedH = GAME_HEIGHT * scale;
+  return {
+    rect,
+    scale,
+    offsetX: (rect.width - renderedW) / 2,
+    offsetY: (rect.height - renderedH) / 2,
+  };
+}
 
 /** Map game-space coordinates to CSS pixels over the scaled canvas. */
 export function gamePointToScreen(
@@ -7,12 +31,10 @@ export function gamePointToScreen(
   gx: number,
   gy: number,
 ): { left: number; top: number; scale: number } {
-  const canvas = game.canvas;
-  const rect = canvas.getBoundingClientRect();
-  const scale = rect.width / GAME_WIDTH;
+  const { rect, scale, offsetX, offsetY } = getGameToScreenTransform(game);
   return {
-    left: rect.left + gx * scale,
-    top: rect.top + gy * scale,
+    left: rect.left + offsetX + gx * scale,
+    top: rect.top + offsetY + gy * scale,
     scale,
   };
 }
@@ -24,14 +46,11 @@ export function gameRectToScreen(
   gw: number,
   gh: number,
 ): { left: number; top: number; width: number; height: number } {
-  const canvas = game.canvas;
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = rect.width / GAME_WIDTH;
-  const scaleY = rect.height / GAME_HEIGHT;
+  const { rect, scale, offsetX, offsetY } = getGameToScreenTransform(game);
   return {
-    left: rect.left + gx * scaleX,
-    top: rect.top + gy * scaleY,
-    width: gw * scaleX,
-    height: gh * scaleY,
+    left: rect.left + offsetX + gx * scale,
+    top: rect.top + offsetY + gy * scale,
+    width: gw * scale,
+    height: gh * scale,
   };
 }
