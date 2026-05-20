@@ -531,7 +531,7 @@ export const DREAMWEED = {
   spawnIntervalMaxMs: 12000,
   maxActive: 1,
   displayHeight: 48,
-  /** Opacity while approaching the lip in the pool (20%). */
+  /** Opacity when first visible on the fall (20%). */
   alphaSpawn: 0.2,
   /** Opacity once carried over the lip into the fall (50%). */
   alphaAfterLip: 0.5,

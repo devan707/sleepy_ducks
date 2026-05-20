@@ -282,17 +282,20 @@ export class Dreamweed extends Phaser.GameObjects.Container {
     return this.y > lipY + this.layout.lipFallThreshold;
   }
 
-  /** Keep the lip pool mask on — only show on the waterfall, never above the lip. */
+  /** Hidden until past the lip; then masked on the falls with alpha ramp. */
   private applyPoolPhase(): void {
-    this.updateAlpha();
-    this.ensurePoolMask();
-    this.setVisible(true);
-    this.glow.setVisible(true);
+    const visible = this.isPastLip();
+    this.setVisible(visible);
+    this.glow.setVisible(visible);
 
-    if (!this.isPastLip()) {
+    if (!visible) {
       this.setRotation(0);
       this.spinAngle = 0;
+      return;
     }
+
+    this.updateAlpha();
+    this.ensurePoolMask();
   }
 
   private updateAlpha(): void {

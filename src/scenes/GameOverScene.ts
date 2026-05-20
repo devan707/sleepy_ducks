@@ -52,8 +52,9 @@ const PASSED_DUCK_LIFT_Y = 52;
 const PASSED_SCORE_GAP = 8;
 const MOONFLOWER_HINT_ICON_H = 44;
 const MOONFLOWER_HINT_ROW_H = 54;
-const PASSED_MOONFLOWER_HINT_LIFT_Y = 25;
-const PASSED_BTN_FLOAT_STAGGER_MS = 520;
+const PASSED_MOONFLOWER_HINT_LIFT_Y = 40;
+/** Opaque art in next_level.png sits higher than retry.png at the same display width. */
+const PASSED_NEXT_LEVEL_BTN_Y_OFFSET = 5;
 
 const RETRY_BTN_WIDTH = 200;
 const PASSED_BTN_WIDTH = 160;
@@ -471,14 +472,14 @@ export class GameOverScene extends Phaser.Scene {
     this.secondaryButton = new FloatingAnimButton(
       this,
       nextX,
-      PASSED_BTN_Y,
+      PASSED_BTN_Y + PASSED_NEXT_LEVEL_BTN_Y_OFFSET,
       ASSET_KEYS.uiNextLevel,
       null,
       {
         depth: DEPTH.ui,
         displayWidth: PASSED_BTN_WIDTH,
         autoFloat: false,
-        floatPhaseMs: PASSED_BTN_FLOAT_STAGGER_MS,
+        floatPhaseMs: 0,
         interactive: true,
         onClick: () => {
           this.soundManager.tryUnlock();
