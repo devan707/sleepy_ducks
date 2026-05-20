@@ -16,6 +16,7 @@ import {
   DUCK_SPRITE,
   GAME_WIDTH,
   GOLDEN_POINTS_MULTIPLIER,
+  ROCK_OBSTACLES,
   STAGE,
   type DuckKind,
   type DuckSex,
@@ -23,6 +24,7 @@ import {
 import { GameEvents } from '../core/GameEvents';
 import type { MotionDifficulty } from '../systems/DifficultyManager';
 import { getCrestApproachPosition } from './EnvironmentLayout';
+import type { RockObstacleBounds } from './WaterfallRocks';
 import type { StageLayout, WaterfallStage } from './WaterfallStage';
 
 function isWakeTextureKey(textureKey: string): boolean {
@@ -103,6 +105,12 @@ export class Duck extends Phaser.GameObjects.Container {
   private earlyTapResumeTimer: Phaser.Time.TimerEvent | null = null;
   /** Score/combo credited once per duck (on save tap, not after wake anim). */
   private savedScored = false;
+  /** Decoy knocked off course by a cascade rock. */
+  private decoyBouncing = false;
+  private decoyBounceVelX = 0;
+  private decoyBounceVelY = 0;
+  private decoySpinDegPerSec = 0;
+  private lastRockBounceAtMs = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -369,6 +377,13 @@ export class Duck extends Phaser.GameObjects.Container {
 
     if (this.motionPhase === 'falling') {
       if (this.isEarlyTapLocked()) return;
+
+      if (this.kind === 'decoy' && this.decoyBouncing) {
+        this.updateDecoyBounce(delta);
+        return;
+      }
+
+      const prevY = this.y;
       this.fallVelocity = Math.min(
         this.maxFallVelocity,
         this.fallVelocity + (this.gravity * delta) / 1000,
@@ -378,7 +393,71 @@ export class Duck extends Phaser.GameObjects.Container {
       this.setScale(this.getVisualScale());
       this.applyDepth();
 
+      this.checkRockCollision(prevY);
       this.checkFallenIntoMist();
+    }
+  }
+
+  private rockHitLead(): number {
+    return Math.min(this.fallVelocity * 0.022, 18);
+  }
+
+  private checkRockCollision(prevY: number): void {
+    if (this.motionPhase !== 'falling' || this.lifecycle !== 'sleeping') return;
+    if (this.kind === 'golden') return;
+
+    const rock = this.waterfallStage
+      .getRocks()
+      .hitTestSegment(this.x, prevY, this.y, this.rockHitLead());
+    if (!rock) return;
+
+    if (this.kind === 'decoy') {
+      this.handleDecoyRockBounce(rock);
+      return;
+    }
+
+    if (this.kind === 'normal' || this.kind === 'heavy') {
+      this.triggerMissed();
+    }
+  }
+
+  private handleDecoyRockBounce(rock: RockObstacleBounds): void {
+    const now = this.scene.time.now;
+    if (now - this.lastRockBounceAtMs < ROCK_OBSTACLES.decoyBounceCooldownMs) return;
+    this.lastRockBounceAtMs = now;
+
+    this.decoyBouncing = true;
+    this.showFullBody();
+
+    const dx = this.x - rock.x;
+    const away = dx === 0 ? (this.x >= rock.x ? 1 : -1) : Math.sign(dx);
+
+    this.decoyBounceVelX = away * Phaser.Math.Between(90, 160);
+    this.decoyBounceVelY = Phaser.Math.Between(-70, -30);
+    this.decoySpinDegPerSec = Phaser.Math.FloatBetween(220, 400) * away;
+    this.scene.events.emit(GameEvents.DECOY_ROCK_HIT);
+  }
+
+  private updateDecoyBounce(delta: number): void {
+    const dt = delta / 1000;
+    const prevY = this.y;
+    this.decoyBounceVelY += this.gravity * dt;
+    this.x += this.decoyBounceVelX * dt;
+    this.y += this.decoyBounceVelY * dt;
+    this.angle += this.decoySpinDegPerSec * dt;
+
+    this.setScale(this.getVisualScale());
+    this.applyDepth();
+    this.checkRockCollision(prevY);
+
+    if (
+      this.y > this.layout.mistZoneTop ||
+      this.x < -100 ||
+      this.x > GAME_WIDTH + 100
+    ) {
+      this.lifecycle = 'gone';
+      this.disableInteractive();
+      this.destroy();
     }
   }
 

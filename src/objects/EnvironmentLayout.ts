@@ -28,6 +28,8 @@ let flowMaskImage: Phaser.GameObjects.Image | null = null;
 let flowBitmapMask: Phaser.Display.Masks.BitmapMask | null = null;
 let lipEmergenceGraphics: Phaser.GameObjects.Graphics | null = null;
 let lipEmergenceMask: Phaser.Display.Masks.GeometryMask | null = null;
+let lipPoolGraphics: Phaser.GameObjects.Graphics | null = null;
+let lipPoolMask: Phaser.Display.Masks.GeometryMask | null = null;
 
 /** Maps 780×1699 environment art to the 390×844 game viewport. */
 export function getEnvScale(): EnvScale {
@@ -247,18 +249,20 @@ export function fillAboveLipMaskShape(g: Phaser.GameObjects.Graphics): void {
   g.fillRect(lip.right.x, 0, GAME_WIDTH - lip.right.x + 2, pocketH);
 }
 
-/** Mask shape for pool / waterfall (everything below the lip line). */
+/** Filled polygon below the diagonal lip (game space) — pool / waterfall side. */
 export function fillBelowLipMaskShape(g: Phaser.GameObjects.Graphics): void {
   const lip = getMaskLipSegmentGame();
+  const { left, right } = lip;
   g.clear();
   g.fillStyle(0xffffff, 1);
-  g.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-  g.setBlendMode(Phaser.BlendModes.ERASE);
-  g.fillTriangle(lip.left.x, lip.left.y, lip.right.x, lip.right.y, GAME_WIDTH, 0);
-  g.fillTriangle(lip.left.x, lip.left.y, 0, 0, GAME_WIDTH, 0);
-  const pocketH = Math.max(lip.left.y, lip.right.y) + 12;
-  g.fillRect(lip.right.x, 0, GAME_WIDTH - lip.right.x + 2, pocketH);
-  g.setBlendMode(Phaser.BlendModes.NORMAL);
+  g.fillTriangle(left.x, left.y, right.x, right.y, right.x, GAME_HEIGHT);
+  g.fillTriangle(left.x, left.y, left.x, GAME_HEIGHT, right.x, GAME_HEIGHT);
+  if (left.x > 0) {
+    g.fillRect(0, left.y, left.x, GAME_HEIGHT - left.y);
+  }
+  if (right.x < GAME_WIDTH) {
+    g.fillRect(right.x, right.y, GAME_WIDTH - right.x, GAME_HEIGHT - right.y);
+  }
 }
 
 /**
@@ -283,12 +287,43 @@ export function invalidateLipEmergenceMask(): void {
   if (lipEmergenceGraphics) {
     fillAboveLipMaskShape(lipEmergenceGraphics);
   }
+  invalidateLipPoolMask();
 }
 
 export function destroyLipEmergenceMask(): void {
   lipEmergenceGraphics?.destroy();
   lipEmergenceGraphics = null;
   lipEmergenceMask = null;
+}
+
+/**
+ * GeometryMask: visible only below the mask lip (air / cliff side hidden).
+ * Use for dreamweed and other pool-surface objects.
+ */
+export function createLipPoolMask(scene: Phaser.Scene): Phaser.Display.Masks.GeometryMask {
+  destroyLipPoolMask();
+  lipPoolGraphics = scene.add.graphics();
+  lipPoolGraphics.setScrollFactor(0);
+  lipPoolGraphics.setVisible(false);
+  fillBelowLipMaskShape(lipPoolGraphics);
+  lipPoolMask = lipPoolGraphics.createGeometryMask();
+  return lipPoolMask;
+}
+
+export function getLipPoolMask(scene: Phaser.Scene): Phaser.Display.Masks.GeometryMask {
+  return lipPoolMask ?? createLipPoolMask(scene);
+}
+
+export function invalidateLipPoolMask(): void {
+  if (lipPoolGraphics) {
+    fillBelowLipMaskShape(lipPoolGraphics);
+  }
+}
+
+export function destroyLipPoolMask(): void {
+  lipPoolGraphics?.destroy();
+  lipPoolGraphics = null;
+  lipPoolMask = null;
 }
 
 /** Stretch static 780×1699 layers to fill the viewport (matches setDisplaySize). */

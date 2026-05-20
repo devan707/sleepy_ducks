@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 
-const EGG_W = 22;
-const EGG_H = 28;
-const INSET = 3;
+const EGG_SCALE = 0.8;
+const EGG_W = 22 * EGG_SCALE;
+const EGG_H = 28 * EGG_SCALE;
+const INSET = 3 * EGG_SCALE;
 const INNER_W = EGG_W - INSET * 2;
 const INNER_H = EGG_H - INSET * 2;
 const OUTLINE = 0xc9a020;
@@ -30,7 +31,7 @@ export class GoldenEggMeter {
 
     this.fill = scene.add.graphics();
     this.shell = scene.add.graphics();
-    this.glint = scene.add.ellipse(-4, -EGG_H * 0.22, 5, 7, GLINT, 0.55);
+    this.glint = scene.add.ellipse(-4 * EGG_SCALE, -EGG_H * 0.22, 5 * EGG_SCALE, 7 * EGG_SCALE, GLINT, 0.55);
 
     // Fill under outline so the stroke stays crisp on top.
     this.root.add([this.fill, this.shell, this.glint]);
@@ -77,7 +78,7 @@ export class GoldenEggMeter {
     g.clear();
 
     if (state === 'empty') {
-      g.fillStyle(EMPTY_FILL, 1);
+      g.fillStyle(EMPTY_FILL, 0.5);
       g.fillEllipse(0, 0, INNER_W, INNER_H);
       return;
     }

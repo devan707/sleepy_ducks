@@ -86,7 +86,8 @@ type RuleVisual =
   | 'balloon'
   | 'decoy'
   | 'combo'
-  | 'moonflower';
+  | 'moonflower'
+  | 'dreamweed';
 
 type RuleSection = {
   title: string;
@@ -136,8 +137,14 @@ const SECTIONS: RuleSection[] = [
     gapAfter: 2,
   },
   {
+    title: 'Dreamweed',
+    body: 'Dreamweed drifts from the waterfall lip. Grab it, then swipe left or right to collect it — tapping alone will not work!',
+    imageKey: ASSET_KEYS.dreamweed,
+    visual: 'dreamweed',
+  },
+  {
     title: 'Charms',
-    body: 'Charms are special keepsakes you collect during a run. Open Settings to see the ones you have found. After it gets dark, tap the glowing moonflower on the cliff to collect one!',
+    body: 'Charms are special keepsakes you collect during a run. Open Settings to see your collection. After sunset, tap the glowing moonflower on the cliff. Swipe falling dreamweed from the waterfall to collect it too!',
     imageKey: MOONFLOWER_ATLAS_KEYS.sway,
     visual: 'moonflower',
     frame: 'frame_000',
@@ -154,6 +161,7 @@ function rulesImageHeight(visual?: RuleVisual): number {
   if (visual === 'balloon') return RULES_BALLOON_HEIGHT;
   if (visual === 'combo') return 0;
   if (visual === 'moonflower') return 52;
+  if (visual === 'dreamweed') return 52;
   let h = RULES_DUCK_HEIGHT;
   if (visual === 'heavyPair') h *= DUCK_KIND_VISUAL.heavy.scaleMult;
   if (visual === 'goldenWithEgg') h *= DUCK_KIND_VISUAL.golden.scaleMult;

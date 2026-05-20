@@ -64,6 +64,8 @@ export const STAGE = {
   balloonDepth: 90,
   /** Moonflower collectible on the left cliff. */
   depthMoonflower: 56,
+  /** Falling dreamweed at the waterfall lip. */
+  depthDreamweed: 57,
   /** Charm box reveal overlay. */
   depthCharmReveal: 120,
 } as const;
@@ -98,10 +100,20 @@ export const DUCK_SPAWN_PROFILES: readonly {
 
 /** Shuffled quota bag keeps long-run rates while reducing streaks. */
 export const DUCK_SPAWN = {
+  /** Grace period after run start before the first mallard(s) appear. */
+  firstSpawnDelayMs: 2500,
   /** Mallards drawn per shuffled bag before refill. */
   bagSize: 25,
-  /** Max heavy sleepers in a row within one bag (when mix allows). */
-  maxHeavyStreak: 2,
+  /**
+   * Max consecutive heavy sleepers in one spawn bag — ramps with HUD elapsed time.
+   * Pairs with heavyShareRamp so early runs stay gentle, late runs allow clumps.
+   */
+  maxHeavyStreakRamp: [
+    { atSec: 0, maxStreak: 1 },
+    { atSec: 10, maxStreak: 2 },
+    { atSec: 30, maxStreak: 3 },
+    { atSec: 60, maxStreak: 4 },
+  ] as const,
   /** Max same-sex mallards in a row within one bag (when mix allows). */
   maxSexStreak: 4,
   /** Heavy share ramps from rare at 0s to common by 60s (sex ratios within each kind preserved). */
@@ -111,6 +123,16 @@ export const DUCK_SPAWN = {
     heavyShareByStep: [0.05, 0.08, 0.12, 0.16, 0.20, 0.24, 0.30] as const,
   },
 } as const;
+
+/** Max consecutive heavy picks allowed in the spawn bag at this HUD elapsed time. */
+export function getMaxHeavyStreakAtSec(elapsedSec: number): number {
+  const ramp = DUCK_SPAWN.maxHeavyStreakRamp;
+  let maxStreak: number = ramp[0].maxStreak;
+  for (const step of ramp) {
+    if (elapsedSec >= step.atSec) maxStreak = step.maxStreak;
+  }
+  return maxStreak;
+}
 
 /** Decoys use a separate spawn clock — never mixed into the mallard schedule. */
 export const DECOY_SPAWN = {
@@ -303,10 +325,17 @@ export function getSunsetElapsedSec(): number {
  * Visual day/night may differ — these drive gameplay beats the player reads off the clock.
  */
 export const HUD_RUN_CLOCK = {
-  moonflowerHintSec: 55,
+  moonflowerHintSec: 70,
   moonflowerSproutSec: 60,
+  moonflowerHudSec: 75,
+  /** Shown on the HUD timer this many seconds before level pass. */
+  levelPassAlmostThereLeadSec: 6,
   levelPassSec: 65,
 } as const;
+
+export function getAlmostThereSec(): number {
+  return HUD_RUN_CLOCK.levelPassSec - HUD_RUN_CLOCK.levelPassAlmostThereLeadSec;
+}
 
 /** @deprecated Use HUD_RUN_CLOCK.moonflowerHintSec */
 export const MOONFLOWER_HINT = {
@@ -495,3 +524,87 @@ export const MOONFLOWER = {
 export const MOONFLOWER_COLLECT_TOAST = {
   flowerHeight: 36,
 } as const;
+
+/** Falls from the waterfall lip — swipe left/right to collect. */
+export const DREAMWEED = {
+  spawnIntervalMinMs: 8000,
+  spawnIntervalMaxMs: 12000,
+  maxActive: 1,
+  displayHeight: 48,
+  /** Opacity while approaching the lip in the pool (20%). */
+  alphaSpawn: 0.2,
+  /** Opacity once carried over the lip into the fall (50%). */
+  alphaAfterLip: 0.5,
+  /** Px past the lip before alpha finishes settling to alphaAfterLip. */
+  alphaSettlePx: 28,
+  glowColor: 0x9cff88,
+  glowAlpha: 0.22,
+  glowPulseAlpha: 0.32,
+  hitPad: 1.35,
+  /** Crest approach — mirrors duck lip path (deep pool → lip at an angle). */
+  spawnBelowLip: 30,
+  crestEndBelowLip: 6,
+  crestDriftAlongLip: 40,
+  crestDurationMs: 3200,
+  crestApproachSpeed: 1.55,
+  /** Slow creep over the lip (initial fall velocity px/s). */
+  fallSpeedStart: 36,
+  /** Fall acceleration after the slow start — reaches duck speed quickly. */
+  fallGravityAccel: 380,
+  /** Cap matches mallard terminal fall velocity. */
+  maxFallVelocity: 780,
+  spinSpeedMin: 0.0005,
+  spinSpeedMax: 0.0012,
+  spawnRotationMin: -0.45,
+  spawnRotationMax: 0.45,
+  swipeMinPx: 40,
+  swayFrameRate: 10,
+  despawnBelowY: GAME_HEIGHT + 80,
+  /** Fall speed while snagged on a cascade rock (px/s). */
+  rockSnagFallSpeed: 14,
+  /** Horizontal slide speed while slipping off a rock (px/s). */
+  rockSlideSpeed: 58,
+  /** Tilt while sliding off a rock (degrees, signed by slide dir). */
+  rockSlideTiltDeg: 22,
+} as const;
+
+/** Animated rocks in the falls — block mallards, bounce decoys, dreamweed steers around. */
+export const ROCK_OBSTACLES = {
+  displayHeight: 92,
+  animFrameRate: 10,
+  depth: 51,
+  /** Min ms between decoy re-bounces on the same rock. */
+  decoyBounceCooldownMs: 220,
+  /** Whole-sprite opacity so splash edges blend into the falls. */
+  alpha: 0.8,
+  /** Default collidable crown — fraction of display height above the rock foot (near sprite top). */
+  hitTopFrac: 0.66,
+  /** Default collidable base — fraction of display height above the rock foot (lower on the rock). */
+  hitBottomFrac: 0.38,
+  placements: [
+    {
+      id: 'rock' as const,
+      /** Middle-left, nudged down and toward center. */
+      x: 162,
+      y: 448,
+      hitTopFrac: 0.64,
+      hitBottomFrac: 0.36,
+      hitRadiusX: 28,
+      avoidRadius: 58,
+    },
+    {
+      id: 'rock2' as const,
+      /** Lower-right in the cascade — palm island asset. */
+      x: 302,
+      y: 584,
+      displayHeight: 104,
+      /** Crown of the rock island only — palm fronds above ~0.72 are non-solid. */
+      hitTopFrac: 0.58,
+      hitBottomFrac: 0.34,
+      hitRadiusX: 30,
+      avoidRadius: 60,
+    },
+  ],
+} as const;
+
+export type RockObstacleId = (typeof ROCK_OBSTACLES.placements)[number]['id'];

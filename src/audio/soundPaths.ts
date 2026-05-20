@@ -29,6 +29,9 @@ export const CRACKING_EGG_URL = SOUNDFX_BASE + encodeURIComponent('egg-cracking.
 export const LEVEL_PASS_URL = SOUNDFX_BASE + encodeURIComponent('pass.mp3');
 export const CHEERING_URL = SOUNDFX_BASE + encodeURIComponent('cheering.mp3');
 
+/** Decoy duck bounces off a cascade rock. */
+export const WOOD_URL = SOUNDFX_BASE + encodeURIComponent('wood.mp3');
+
 /**
  * Looping ambient beds that play during gameplay. `peak` is the maximum
  * fraction of the file's original volume when the SFX slider is at 100%.

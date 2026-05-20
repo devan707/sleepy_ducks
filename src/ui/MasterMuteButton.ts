@@ -132,10 +132,10 @@ export function getMenuMasterMutePosition(gear: { x: number; y: number }): {
   return { x: gear.x, y: gear.y + RADIUS * 2 + 8 };
 }
 
-/** Above the in-game gear (gear sits at bottom-right). */
+/** Left of the in-game gear (same row, bottom-right). */
 export function getGameMasterMutePosition(gear: { x: number; y: number }): {
   x: number;
   y: number;
 } {
-  return { x: gear.x, y: gear.y - (RADIUS * 2 + 8) };
+  return { x: gear.x - (RADIUS * 2 + 8), y: gear.y };
 }

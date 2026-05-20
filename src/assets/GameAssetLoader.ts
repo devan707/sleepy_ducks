@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { AssetManager } from './AssetManager';
 import { registerBalloonAnimations } from './BalloonAnimations';
+import { registerDreamweedAnimations } from './DreamweedAnimations';
+import { registerRockAnimations } from './RockAnimations';
 import { registerMoonflowerAnimations } from './MoonflowerAnimations';
 import { registerUiButtonAnimations } from './UiButtonAnimations';
 import { registerDuckAnimations } from './DuckAnimations';
@@ -91,9 +93,11 @@ export function finalizeGameAssets(scene: Phaser.Scene): void {
   }
 
   registerEnvironmentAnimations(scene);
+  registerRockAnimations(scene);
   registerDuckAnimations(scene);
   registerBalloonAnimations(scene);
   registerMoonflowerAnimations(scene);
+  registerDreamweedAnimations(scene);
   registerUiButtonAnimations(scene);
   AssetManager.markGameAssetsReady();
 }
@@ -197,9 +201,11 @@ export function loadGameAssets(
   if (AssetManager.hasRealGameplayArt()) {
     if (!AssetManager.isGameAssetsReady()) {
       registerEnvironmentAnimations(scene);
+      registerRockAnimations(scene);
       registerDuckAnimations(scene);
       registerBalloonAnimations(scene);
       registerMoonflowerAnimations(scene);
+      registerDreamweedAnimations(scene);
       registerUiButtonAnimations(scene);
       AssetManager.markGameAssetsReady();
     }

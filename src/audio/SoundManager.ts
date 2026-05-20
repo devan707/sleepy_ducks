@@ -9,6 +9,7 @@ import {
   LIFE_URL,
   MOONFLOWER_URL,
   WAKE_QUACK_URLS,
+  WOOD_URL,
 } from './soundPaths';
 import {
   getSfxVolume,
@@ -29,7 +30,8 @@ export type SoundId =
   | 'bad'
   | 'badTap'
   | 'earlyBuzzer'
-  | 'bonus';
+  | 'bonus'
+  | 'decoyRock';
 
 let instance: SoundManager | null = null;
 
@@ -42,6 +44,7 @@ const LIFE_PEAK_VOLUME = 0.76;
 const CRACKING_EGG_PEAK_VOLUME = 0.78;
 const LEVEL_PASS_PEAK_VOLUME = 0.78;
 const CHEERING_PEAK_VOLUME = 0.72;
+const WOOD_PEAK_VOLUME = 0.74;
 /** Cheer follows the pass stinger by this much (ms). */
 const LEVEL_PASS_CHEER_DELAY_MS = 420;
 /** ~250 ms full quack, 250 ms fade, hard stop at 500 ms. */
@@ -81,6 +84,7 @@ export class SoundManager {
   private readonly crackingEggClip: HTMLAudioElement;
   private readonly levelPassClip: HTMLAudioElement;
   private readonly cheeringClip: HTMLAudioElement;
+  private readonly woodClip: HTMLAudioElement;
   private lastWakeIndex = -1;
   private activeWakePlayback: HTMLAudioElement | null = null;
   private activeGoldenPlayback: HTMLAudioElement | null = null;
@@ -137,6 +141,11 @@ export class SoundManager {
     this.cheeringClip.loop = false;
     this.cheeringClip.muted = muted;
 
+    this.woodClip = new Audio(WOOD_URL);
+    this.woodClip.preload = 'auto';
+    this.woodClip.loop = false;
+    this.woodClip.muted = muted;
+
     for (const { url, peak } of GAMEPLAY_BACKGROUND_LOOPS) {
       const clip = new Audio(url);
       clip.preload = 'auto';
@@ -159,6 +168,7 @@ export class SoundManager {
     this.crackingEggClip.muted = muted;
     this.levelPassClip.muted = muted;
     this.cheeringClip.muted = muted;
+    this.woodClip.muted = muted;
     for (const { clip } of this.backgroundTracks) clip.muted = muted;
     if (this.activeWakePlayback) this.activeWakePlayback.muted = muted;
     if (this.activeGoldenPlayback) this.activeGoldenPlayback.muted = muted;
@@ -717,6 +727,9 @@ export class SoundManager {
       case 'bonus':
         this.beep(660, 0.08, 'sine', 0.12);
         window.setTimeout(() => this.beep(880, 0.1, 'sine', 0.1), 90);
+        break;
+      case 'decoyRock':
+        this.playGenericOneShot(this.woodClip, WOOD_PEAK_VOLUME);
         break;
     }
   }

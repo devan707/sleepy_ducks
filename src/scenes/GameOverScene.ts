@@ -38,8 +38,13 @@ const DEPTH = {
 const GEAR_RADIUS = 22;
 const GEAR_CLEARANCE = 14;
 const SECTION_GAP = 16;
-/** Large hero bloom between banner and celebration copy (moonflower outcome). */
-const MOONFLOWER_HERO_HEIGHT = 344;
+/** Compact hero bloom on moonflower-collected level passed (keeps room for score card). */
+const MOONFLOWER_HERO_HEIGHT = 96;
+const MOONFLOWER_CELEBRATION_LIFT_Y = 22;
+/** Pulls title + link up toward the hero so the score card has more room below. */
+const MOONFLOWER_TEXT_LIFT_Y = 28;
+const MOONFLOWER_CHARMS_LINK_GAP = 14;
+const MOONFLOWER_SCORE_CARD_GAP = 28;
 const PASSED_SCORE_CARD_OFFSET_Y = 15;
 /** Flying female duck below level-passed banner (no moonflower). */
 const PASSED_DUCK_HERO_HEIGHT = 128;
@@ -126,7 +131,7 @@ export class GameOverScene extends Phaser.Scene {
     if (data.outcome === 'failed') {
       contentY = this.addFailedSubtitle(cx, contentY) + SECTION_GAP;
     } else if (data.outcome === 'passedWithMoonflower') {
-      contentY = this.addMoonflowerCelebration(cx, contentY) + SECTION_GAP;
+      contentY = this.addMoonflowerCelebration(cx, contentY) + MOONFLOWER_SCORE_CARD_GAP;
     } else if (data.outcome === 'passed') {
       contentY = this.addPassedCelebration(cx, contentY) + PASSED_SCORE_GAP;
     }
@@ -229,10 +234,11 @@ export class GameOverScene extends Phaser.Scene {
   private addMoonflowerCelebration(cx: number, topY: number): number {
     const heroDepth = DEPTH.ui + 1;
     const labelDepth = DEPTH.ui + 3;
+    const baseY = topY - MOONFLOWER_CELEBRATION_LIFT_Y;
 
     if (this.textures.exists(MOONFLOWER_ATLAS_KEYS.sway)) {
       registerMoonflowerAnimations(this);
-      const heroY = topY + MOONFLOWER_HERO_HEIGHT * 0.5;
+      const heroY = baseY + MOONFLOWER_HERO_HEIGHT * 0.42;
       const hero = this.add.sprite(
         cx,
         heroY,
@@ -250,7 +256,7 @@ export class GameOverScene extends Phaser.Scene {
       }
     }
 
-    const titleY = topY + MOONFLOWER_HERO_HEIGHT * 0.56;
+    const titleY = baseY + MOONFLOWER_HERO_HEIGHT + 2 - MOONFLOWER_TEXT_LIFT_Y;
     const title = this.add
       .text(
         cx,
@@ -268,8 +274,8 @@ export class GameOverScene extends Phaser.Scene {
       .setScrollFactor(0);
     void ensureLilitaFont(title, 22);
 
-    const linkY = titleY + title.height + 8;
-    createTextLink(
+    const linkY = titleY + title.height + MOONFLOWER_CHARMS_LINK_GAP;
+    const charmsLink = createTextLink(
       this,
       cx,
       linkY,
@@ -282,7 +288,7 @@ export class GameOverScene extends Phaser.Scene {
       { fontSize: '14px', strokeThickness: 2 },
     );
 
-    return linkY + 24;
+    return linkY + charmsLink.getBounds().height + 8;
   }
 
   private addPassedCelebration(cx: number, topY: number): number {

@@ -16,16 +16,19 @@ import { WaterfallFlowEffect } from '../effects/WaterfallFlowEffect';
 import { createMistEmitter } from '../effects/ParticleEffects';
 import {
   createLipEmergenceMask,
+  createLipPoolMask,
   destroyFlowMask,
   drawDebugLipLine,
   fitStaticEnvImage,
-  getLipEmergenceMask,
+  getLipEmergenceMask as resolveLipEmergenceMask,
+  getLipPoolMask as resolveLipPoolMask,
   getLipYGame,
   getSpawnLaneBounds,
   invalidateLipEmergenceMask,
   invalidateMaskCache,
   type DebugOverlay,
 } from './EnvironmentLayout';
+import { WaterfallRocks } from './WaterfallRocks';
 import type { DuckMotionPhase } from './Duck';
 
 export interface StageLayout {
@@ -53,6 +56,7 @@ export class WaterfallStage {
   private leftCliffImage!: Phaser.GameObjects.Image;
   private dayNight!: DayNightCycle;
   private cliffCalibrator: LeftCliffCalibrator | null = null;
+  private rocks!: WaterfallRocks;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -68,10 +72,12 @@ export class WaterfallStage {
 
     this.createBackground();
     createLipEmergenceMask(scene);
+    createLipPoolMask(scene);
     this.dayNight = new DayNightCycle(scene);
     this.createCalibrationDim();
     this.flowEffect = new WaterfallFlowEffect(scene);
     this.createForeground();
+    this.rocks = new WaterfallRocks(scene);
     this.createLeftCliff();
     this.mistEmitter = createMistEmitter(scene);
     this.mistEmitter.setDepth(STAGE.mistDepth);
@@ -184,8 +190,16 @@ export class WaterfallStage {
     return this.dayNight.getStarVisibility();
   }
 
+  getRocks(): WaterfallRocks {
+    return this.rocks;
+  }
+
   getLipEmergenceMask(): Phaser.Display.Masks.GeometryMask {
-    return getLipEmergenceMask(this.scene);
+    return resolveLipEmergenceMask(this.scene);
+  }
+
+  getLipPoolMask(): Phaser.Display.Masks.GeometryMask {
+    return resolveLipPoolMask(this.scene);
   }
 
   getDuckDepth(crestProgress: number, motionPhase: DuckMotionPhase): number {
@@ -206,6 +220,7 @@ export class WaterfallStage {
     this.dayNight?.destroy();
     this.flowEffect?.destroy();
     this.mistEmitter?.destroy();
+    this.rocks?.destroy();
     destroyFlowMask();
   }
 

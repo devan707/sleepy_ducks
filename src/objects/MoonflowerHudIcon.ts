@@ -46,7 +46,21 @@ export class MoonflowerHudIcon {
     this.colored.setVisible(false);
 
     this.root.add([this.silhouette, this.colored]);
+    this.root.setVisible(false);
     this.setCollectedThisRun(false, false);
+  }
+
+  /** Show the HUD moonflower slot (empty silhouette until collected). */
+  reveal(): void {
+    if (this.root.visible) return;
+    this.root.setVisible(true);
+    this.root.setAlpha(0);
+    this.scene.tweens.add({
+      targets: this.root,
+      alpha: 1,
+      duration: 420,
+      ease: 'Sine.easeOut',
+    });
   }
 
   getContainer(): Phaser.GameObjects.Container {

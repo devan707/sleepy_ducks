@@ -4,6 +4,7 @@ import {
   COMBO,
   DUCK_SPAWN,
   DUCK_SPAWN_PROFILES,
+  getMaxHeavyStreakAtSec,
   type DuckKind,
   type DuckSex,
 } from '../config/gameConfig';
@@ -203,6 +204,11 @@ export class DifficultyManager {
       intensityStepSec,
       intensityRampSec,
     );
+  }
+
+  /** Max consecutive heavy sleepers in the current spawn bag (ramps at 0 / 10 / 30 / 60s). */
+  getMaxHeavyStreak(): number {
+    return getMaxHeavyStreakAtSec(this.elapsedSec);
   }
 
   /** Mallard spawn weights for the current run time (sums to 1). */

@@ -1,4 +1,4 @@
-import { CHARM_SLOT_COUNT, type CharmId } from '../config/charmConfig';
+import { CHARM_SLOT_COUNT, CHARMS, type CharmId } from '../config/charmConfig';
 
 const CHARMS_KEY = 'sleeping-ducks-charms';
 
@@ -11,30 +11,41 @@ interface LegacyCharmsState {
 export interface CharmsState {
   /** Total times each charm was collected across all runs. */
   counts: Record<CharmId, number>;
-  /** First slot shows moonflower when count > 0. */
   slots: (CharmId | null)[];
 }
 
 export function createEmptyCharmsState(): CharmsState {
   return {
-    counts: { moonflower: 0 },
+    counts: { moonflower: 0, dreamweed: 0 },
     slots: Array.from({ length: CHARM_SLOT_COUNT }, () => null),
   };
 }
 
 function isValidCharmId(value: unknown): value is CharmId {
-  return value === 'moonflower';
+  return value === 'moonflower' || value === 'dreamweed';
 }
 
 function migrateLegacy(raw: LegacyCharmsState): CharmsState {
   const state = createEmptyCharmsState();
-  if (Array.isArray(raw.collected) && raw.collected.includes('moonflower')) {
-    state.counts.moonflower = 1;
+  if (Array.isArray(raw.collected)) {
+    for (const id of raw.collected) {
+      if (isValidCharmId(id)) {
+        state.counts[id] = Math.max(state.counts[id], 1);
+        state.slots[CHARMS[id].slotIndex] = id;
+      }
+    }
   }
   if (Array.isArray(raw.slots) && raw.slots.length === CHARM_SLOT_COUNT) {
-    state.slots = raw.slots.map((s) => (s === 'moonflower' ? 'moonflower' : null));
-  } else if (state.counts.moonflower > 0) {
-    state.slots[0] = 'moonflower';
+    state.slots = raw.slots.map((s) => (isValidCharmId(s) ? s : null));
+    for (const id of state.slots) {
+      if (id && state.counts[id] === 0) {
+        state.counts[id] = 1;
+      }
+    }
+  } else {
+    if (state.counts.moonflower > 0) {
+      state.slots[CHARMS.moonflower.slotIndex] = 'moonflower';
+    }
   }
   return state;
 }
@@ -44,10 +55,22 @@ function isValidState(raw: unknown): raw is CharmsState {
   const o = raw as CharmsState;
   if (!o.counts || typeof o.counts !== 'object') return false;
   if (!Array.isArray(o.slots) || o.slots.length !== CHARM_SLOT_COUNT) return false;
-  const count = o.counts.moonflower;
-  if (count !== undefined && (typeof count !== 'number' || count < 0)) return false;
+  for (const id of Object.keys(CHARMS) as CharmId[]) {
+    const count = o.counts[id];
+    if (count !== undefined && (typeof count !== 'number' || count < 0)) return false;
+  }
   if (!o.slots.every((s) => s === null || isValidCharmId(s))) return false;
   return true;
+}
+
+function normalizeState(parsed: CharmsState): CharmsState {
+  return {
+    counts: {
+      moonflower: parsed.counts.moonflower ?? 0,
+      dreamweed: parsed.counts.dreamweed ?? 0,
+    },
+    slots: [...parsed.slots],
+  };
 }
 
 export function loadCharms(): CharmsState {
@@ -57,10 +80,7 @@ export function loadCharms(): CharmsState {
     if (!raw) return createEmptyCharmsState();
     const parsed = JSON.parse(raw) as unknown;
     if (isValidState(parsed)) {
-      return {
-        counts: { moonflower: parsed.counts.moonflower ?? 0 },
-        slots: [...parsed.slots],
-      };
+      return normalizeState(parsed);
     }
     if (parsed && typeof parsed === 'object' && 'collected' in (parsed as object)) {
       return migrateLegacy(parsed as LegacyCharmsState);
@@ -90,11 +110,12 @@ export function isCharmCollected(id: CharmId): boolean {
 }
 
 export function getCollectedCharmCount(): number {
-  return getCharmCount('moonflower');
+  const state = loadCharms();
+  return Object.values(state.counts).reduce((sum, n) => sum + (n > 0 ? 1 : 0), 0);
 }
 
-/** Add one collection (one per run when the player taps the night flower). */
-export function recordCharmCollect(id: CharmId, slotIndex = 0): CharmsState {
+/** Add one collection for a charm keepsake. */
+export function recordCharmCollect(id: CharmId, slotIndex = CHARMS[id].slotIndex): CharmsState {
   const state = loadCharms();
   state.counts[id] = (state.counts[id] ?? 0) + 1;
   if (slotIndex >= 0 && slotIndex < CHARM_SLOT_COUNT && state.counts[id] > 0) {

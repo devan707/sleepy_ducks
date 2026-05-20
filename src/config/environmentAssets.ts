@@ -23,6 +23,8 @@ export const ENV_KEYS = {
   foregroundRocks: 'env-foreground-rocks',
   leftCliff: 'env-left-cliff',
   sun: 'env-sun',
+  rock: 'env-rock',
+  rock2: 'env-rock2',
 } as const;
 
 export type EnvAssetKey = (typeof ENV_KEYS)[keyof typeof ENV_KEYS];
@@ -81,6 +83,23 @@ export const ENV_ATLASES: EnvAtlasEntry[] = [
     offsetX: -5,
   },
 ];
+
+export const ENV_ROCK_ATLASES = [
+  {
+    key: ENV_KEYS.rock,
+    png: `${ENV_ROOT_ALT}/rock.png`,
+    json: `${ENV_ROOT_ALT}/rock.json`,
+    animKey: 'rock_splash',
+    frameRate: 10,
+  },
+  {
+    key: ENV_KEYS.rock2,
+    png: `${ENV_ROOT_ALT}/rock2.png`,
+    json: `${ENV_ROOT_ALT}/rock2.json`,
+    animKey: 'rock2_splash',
+    frameRate: 10,
+  },
+] as const;
 
 export const ENV_IMAGES = [
   {

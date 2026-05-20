@@ -19,10 +19,12 @@ import { ComboCounter } from './ComboCounter';
 import { burstComboCelebration } from '../effects/ParticleEffects';
 import { GoldenEggMeter, type GoldenEggMeterState } from './GoldenEggMeter';
 import { MoonflowerHudIcon } from './MoonflowerHudIcon';
+import { DreamweedHudCounter } from './DreamweedHudCounter';
 
 const EGG_ICON_GAP = 6;
-/** Golden egg is wider than the hearts column — extra offset when egg sits left of moonflower. */
-const EGG_SLOT_OFFSET_X = 20;
+/** Moonflower slot sits left of the golden egg. */
+const MOONFLOWER_SLOT_OFFSET_X = 20;
+const MOONFLOWER_EGG_GAP = 28;
 
 const HEART_SIZE = 24;
 const HEART_GAP = 5;
@@ -41,6 +43,7 @@ export class HUD {
   private livesContainer: Phaser.GameObjects.Container;
   private goldenEggMeter: GoldenEggMeter;
   private moonflowerHudIcon: MoonflowerHudIcon;
+  private dreamweedHudCounter: DreamweedHudCounter;
   private hudRoot: Phaser.GameObjects.Container;
   private readonly scoreLeft: number;
   private readonly scoreTop: number;
@@ -91,12 +94,15 @@ export class HUD {
     ]);
 
     const eggY = this.scoreTop + 8 + HEART_SIZE + EGG_BELOW_HEARTS + 14;
-    const moonflowerX = heartsRight - 10;
-    const eggX = heartsRight - 11 - EGG_ICON_GAP - EGG_SLOT_OFFSET_X;
+    const eggX = heartsRight - 10;
+    const moonflowerX = eggX - EGG_ICON_GAP - MOONFLOWER_EGG_GAP - MOONFLOWER_SLOT_OFFSET_X;
+    const dreamweedX = (moonflowerX + eggX) / 2;
     this.moonflowerHudIcon = new MoonflowerHudIcon(scene, moonflowerX, eggY);
+    this.dreamweedHudCounter = new DreamweedHudCounter(scene, dreamweedX, eggY);
     this.goldenEggMeter = new GoldenEggMeter(scene, eggX, eggY);
     this.hudRoot.add([
       this.moonflowerHudIcon.getContainer(),
+      this.dreamweedHudCounter.getContainer(),
       this.goldenEggMeter.getContainer(),
     ]);
 
@@ -191,7 +197,12 @@ export class HUD {
   }
 
   playMoonflowerCollectFly(fromX: number, fromY: number): void {
+    this.moonflowerHudIcon.reveal();
     this.moonflowerHudIcon.flyIntoPlace(fromX, fromY);
+  }
+
+  revealMoonflowerHudIcon(): void {
+    this.moonflowerHudIcon.reveal();
   }
 
   getMoonflowerHudWorldPosition(): { x: number; y: number } {
@@ -200,6 +211,19 @@ export class HUD {
 
   setMoonflowerCollectedThisRun(collected: boolean, animate = false): void {
     this.moonflowerHudIcon.setCollectedThisRun(collected, animate);
+  }
+
+  setDreamweedRunCount(count: number): void {
+    this.dreamweedHudCounter.setRunCount(count);
+  }
+
+  playDreamweedCollectFly(fromX: number, fromY: number): void {
+    this.dreamweedHudCounter.reveal();
+    this.dreamweedHudCounter.flyIntoPlace(fromX, fromY);
+  }
+
+  getDreamweedHudWorldPosition(): { x: number; y: number } {
+    return this.dreamweedHudCounter.getWorldCenter();
   }
 
   destroy(): void {

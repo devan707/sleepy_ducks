@@ -1,5 +1,5 @@
 import { ASSET_ROOT } from './assetRoot';
-import { ENV_ATLASES, ENV_IMAGES, ENV_KEYS } from './environmentAssets';
+import { ENV_ATLASES, ENV_IMAGES, ENV_KEYS, ENV_ROCK_ATLASES } from './environmentAssets';
 
 export { ASSET_ROOT };
 
@@ -40,6 +40,8 @@ export const ASSET_KEYS = {
   atlasMoonflowerBloom: 'atlas-moonflower-bloom',
   atlasMoonflowerSway: 'atlas-moonflower-sway',
   atlasZzz: 'atlas-zzz',
+  dreamweed: 'dreamweed',
+  atlasDreamweedSway: 'atlas-dreamweed-sway',
 } as const;
 
 export type AssetKey = (typeof ASSET_KEYS)[keyof typeof ASSET_KEYS];
@@ -66,6 +68,13 @@ const envFlow1Atlas: AssetManifestEntry = {
   atlasPath: ENV_ATLASES[0].json,
   type: 'atlas',
 };
+
+const envRockAtlasEntries: AssetManifestEntry[] = ENV_ROCK_ATLASES.map((entry) => ({
+  key: entry.key as AssetKey,
+  path: entry.png,
+  atlasPath: entry.json,
+  type: 'atlas' as const,
+}));
 
 /** Small pack — home screen shows in ~1s. */
 export const MENU_MANIFEST: AssetManifestEntry[] = [
@@ -150,12 +159,18 @@ export const MENU_MANIFEST: AssetManifestEntry[] = [
     atlasPath: `${ASSET_ROOT}/sprites/zzz.json`,
     type: 'atlas',
   },
+  {
+    key: ASSET_KEYS.dreamweed,
+    path: `${ASSET_ROOT}/sprites/dreamweed.png`,
+    type: 'image',
+  },
 ];
 
 /** Heavy atlases — loaded in background on the menu screen. */
 export const GAME_MANIFEST: AssetManifestEntry[] = [
   ...envImageEntries,
   envFlow1Atlas,
+  ...envRockAtlasEntries,
   {
     key: ASSET_KEYS.atlasDuckSleep,
     path: `${ASSET_ROOT}/sprites/duck_sleep.png`,
@@ -261,6 +276,12 @@ export const GAME_MANIFEST: AssetManifestEntry[] = [
     key: ASSET_KEYS.atlasMoonflowerSway,
     path: `${ASSET_ROOT}/sprites/moonflower_sway.png`,
     atlasPath: `${ASSET_ROOT}/sprites/moonflower_sway.json`,
+    type: 'atlas',
+  },
+  {
+    key: ASSET_KEYS.atlasDreamweedSway,
+    path: `${ASSET_ROOT}/sprites/dreamweed_sway.png`,
+    atlasPath: `${ASSET_ROOT}/sprites/dreamweed_sway.json`,
     type: 'atlas',
   },
 ];

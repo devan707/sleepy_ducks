@@ -1,15 +1,16 @@
+import { DREAMWEED_STATIC_KEY } from './dreamweedAssets';
 import { MOONFLOWER_ATLAS_KEYS } from './moonflowerAssets';
 
 export const CHARM_SLOT_COUNT = 6;
 
-export type CharmId = 'moonflower';
+export type CharmId = 'moonflower' | 'dreamweed';
 
 export interface CharmDefinition {
   id: CharmId;
   name: string;
   slotIndex: number;
-  iconAtlasKey: string;
-  iconFrame: string;
+  iconKey: string;
+  iconFrame?: string;
 }
 
 export const CHARMS: Record<CharmId, CharmDefinition> = {
@@ -17,8 +18,14 @@ export const CHARMS: Record<CharmId, CharmDefinition> = {
     id: 'moonflower',
     name: 'Moonflower',
     slotIndex: 0,
-    iconAtlasKey: MOONFLOWER_ATLAS_KEYS.sway,
+    iconKey: MOONFLOWER_ATLAS_KEYS.sway,
     iconFrame: 'frame_000',
+  },
+  dreamweed: {
+    id: 'dreamweed',
+    name: 'Dreamweed',
+    slotIndex: 1,
+    iconKey: DREAMWEED_STATIC_KEY,
   },
 };
 
@@ -51,4 +58,16 @@ export const CHARMS_BARE_ROW_LAYOUT = {
 
 export function getCharmDefinition(id: CharmId): CharmDefinition {
   return CHARMS[id];
+}
+
+export function getCharmAtSlot(slotIndex: number): CharmDefinition | null {
+  for (const def of Object.values(CHARMS)) {
+    if (def.slotIndex === slotIndex) return def;
+  }
+  return null;
+}
+
+/** @deprecated Use iconKey */
+export function getCharmIconAtlasKey(id: CharmId): string {
+  return CHARMS[id].iconKey;
 }

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   DECOY_SPAWN,
   DUCK,
+  DUCK_SPAWN,
   DIFFICULTY,
   GOLDEN_REWARD,
   type DuckKind,
@@ -27,6 +28,7 @@ export class SpawnController {
   private timer: Phaser.Time.TimerEvent | null = null;
   private decoyTimer: Phaser.Time.TimerEvent | null = null;
   private goldenTimer: Phaser.Time.TimerEvent | null = null;
+  private startDelayTimer: Phaser.Time.TimerEvent | null = null;
   private readonly mallardMixer: MallardSpawnMixer;
 
   constructor(
@@ -46,14 +48,28 @@ export class SpawnController {
 
   start(): void {
     this.mallardMixer.reset();
+    this.startDelayTimer = this.scene.time.delayedCall(
+      DUCK_SPAWN.firstSpawnDelayMs,
+      () => {
+        this.startDelayTimer = null;
+        this.beginMallardSpawning();
+      },
+    );
+    this.scheduleNextDecoy();
+  }
+
+  private beginMallardSpawning(): void {
     for (let i = 0; i < DIFFICULTY.initialSpawnCount; i++) {
       this.spawnMallard();
     }
     this.scheduleNextMallard();
-    this.scheduleNextDecoy();
   }
 
   stop(): void {
+    if (this.startDelayTimer) {
+      this.startDelayTimer.remove(false);
+      this.startDelayTimer = null;
+    }
     if (this.timer) {
       this.timer.remove(false);
       this.timer = null;

@@ -15,4 +15,5 @@ export const GameEvents = {
   /** First frame stars become visible this run (night). */
   STARS_VISIBLE: 'stars-visible',
   CHARM_COLLECTED: 'charm-collected',
+  DECOY_ROCK_HIT: 'decoy-rock-hit',
 } as const;

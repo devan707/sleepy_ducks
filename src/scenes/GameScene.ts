@@ -16,6 +16,7 @@ import {
   COMBO,
   getComboMilestoneTier,
   DUCK,
+  getAlmostThereSec,
   GOLDEN_EGG,
   HUD_RUN_CLOCK,
   MAX_LIVES,
@@ -67,6 +68,7 @@ import { WatchModeControls } from '../dev/WatchModeControls';
 import { clearEnvironmentGeometryOverride } from '../config/environmentGeometry';
 import { DifficultyManager } from '../systems/DifficultyManager';
 import { MoonflowerController } from '../systems/MoonflowerController';
+import { DreamweedController } from '../systems/DreamweedController';
 import { SpawnController } from '../systems/SpawnController';
 
 const REOPEN_SETTINGS_AFTER_RULES = 'reopen-settings-after-rules';
@@ -85,6 +87,7 @@ export class GameScene extends Phaser.Scene {
   private viewingRulesFromSettings = false;
   private stage!: WaterfallStage;
   private moonflowerController!: MoonflowerController;
+  private dreamweedController!: DreamweedController;
   private ducks!: Phaser.GameObjects.Group;
 
   private score = 0;
@@ -102,10 +105,15 @@ export class GameScene extends Phaser.Scene {
   private pointerDownY = 0;
   /** Skip pointerup when pointerdown already hit a duck/balloon. */
   private suppressTapOnPointerUp = false;
+  /** Active dreamweed grab — suppresses bad taps until pointer up. */
+  private dreamweedGrabActive = false;
   /** Prevents double life loss from one mistake in the same frame. */
   private lifeLossCooldown = false;
   private bottomToast!: GameplayBottomToast;
   private moonflowerHintShown = false;
+  private moonflowerHudRevealed = false;
+  private almostThereShown = false;
+  private runStartBannerShown = false;
   private goldenEggRewardTimer: Phaser.Time.TimerEvent | null = null;
   /** Prevents one golden duck from crediting the egg twice (e.g. duplicate save events). */
   private goldenEggCreditedDucks = new WeakSet<Duck>();
@@ -146,12 +154,16 @@ export class GameScene extends Phaser.Scene {
     this.cancelGoldenEggRewardTimer();
     this.goldenEggCreditedDucks = new WeakSet<Duck>();
     this.moonflowerHintShown = false;
+    this.moonflowerHudRevealed = false;
+    this.almostThereShown = false;
+    this.runStartBannerShown = false;
     this.levelPassedThisRun = false;
     this.combo = 0;
     this.comboDrainProgress = 0;
     this.stats = createRunStats();
     this.activeBalloons = [];
     this.suppressTapOnPointerUp = false;
+    this.dreamweedGrabActive = false;
 
     this.cameras.main.setBackgroundColor(COLORS.skyBottom);
     this.cameras.main.fadeIn(300, 0, 0, 0);
@@ -212,7 +224,9 @@ export class GameScene extends Phaser.Scene {
     );
 
     this.moonflowerController = new MoonflowerController(this, this.stage, this.bottomToast);
+    this.dreamweedController = new DreamweedController(this, this.stage);
     this.hud.setMoonflowerCollectedThisRun(false);
+    this.hud.setDreamweedRunCount(0);
 
     this.events.off('duck-spawned', this.onDuckSpawned, this);
     this.events.off('duck-partial-tap', this.onPartialTap, this);
@@ -221,6 +235,7 @@ export class GameScene extends Phaser.Scene {
     this.events.off(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
     this.events.off(GameEvents.EARLY_TAP, this.onEarlyTap, this);
     this.events.off(GameEvents.CHARM_COLLECTED, this.onCharmCollected, this);
+    this.events.off(GameEvents.DECOY_ROCK_HIT, this.onDecoyRockHit, this);
 
     this.events.on('duck-spawned', this.onDuckSpawned, this);
     this.events.on('duck-partial-tap', this.onPartialTap, this);
@@ -229,6 +244,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
     this.events.on(GameEvents.EARLY_TAP, this.onEarlyTap, this);
     this.events.on(GameEvents.CHARM_COLLECTED, this.onCharmCollected, this);
+    this.events.on(GameEvents.DECOY_ROCK_HIT, this.onDecoyRockHit, this);
     this.events.on(REOPEN_SETTINGS_AFTER_RULES, this.reopenSettingsAfterRules, this);
 
     this.levelPassedBanner?.destroy();
@@ -257,23 +273,39 @@ export class GameScene extends Phaser.Scene {
       this.soundManager.tryUnlock();
     });
     this.input.on('pointerdown', this.onPointerDown, this);
+    this.input.on('pointermove', this.onPointerMove, this);
     this.input.on('pointerup', this.onPointerUp, this);
 
     if (isDevMode() && isCalibrateCliffUrlParam()) {
       this.moonflowerController.setEnabled(false);
+      this.dreamweedController.setEnabled(false);
       this.stage.enterLeftCliffAlignMode();
     } else if (isDevMode() && isCalibrateFlowUrlParam()) {
       this.moonflowerController.setEnabled(false);
+      this.dreamweedController.setEnabled(false);
       this.stage.enterFlowAlignMode();
     } else if (isDevMode() && isCalibrateUrlParam()) {
       this.moonflowerController.setEnabled(false);
+      this.dreamweedController.setEnabled(false);
       this.stage.enterCalibrationMode();
     } else {
       this.spawner.start();
+      this.dreamweedController.start();
+      this.showRunStartBanner();
       if (isDevMode()) {
         this.devLegend?.setVisible(false);
       }
     }
+  }
+
+  private showRunStartBanner(): void {
+    if (this.runStartBannerShown || this.calibrationMode) return;
+    this.runStartBannerShown = true;
+    this.levelPassedBanner?.show({
+      title: 'Sleepy Falls',
+      followUp: "Make it 'till nightfall.",
+      animation: 'titleIntro',
+    });
   }
 
   private onCalibrationModeChanged(active: boolean): void {
@@ -289,6 +321,7 @@ export class GameScene extends Phaser.Scene {
     this.settingsPaused = true;
     this.spawner.stop();
     this.moonflowerController?.setEnabled(false);
+    this.dreamweedController?.setEnabled(false);
     this.musicManager.pauseForInterruption();
     this.soundManager.pauseForInterruption();
   }
@@ -300,6 +333,7 @@ export class GameScene extends Phaser.Scene {
     this.soundManager.resumeFromInterruption();
     if (!this.isGameOver && !this.calibrationMode) {
       this.moonflowerController?.setEnabled(true);
+      this.dreamweedController?.setEnabled(true);
       this.spawner.start();
     }
   }
@@ -340,6 +374,7 @@ export class GameScene extends Phaser.Scene {
     if (this.calibrationMode) return;
     this.calibrationMode = true;
     this.moonflowerController?.setEnabled(false);
+    this.dreamweedController?.setEnabled(false);
     this.spawner.stop();
     this.freezeDucks();
     this.stage.setCalibrationVisuals(true);
@@ -360,6 +395,7 @@ export class GameScene extends Phaser.Scene {
     this.unfreezeDucks();
     if (!this.isGameOver) {
       this.moonflowerController?.setEnabled(true);
+      this.dreamweedController?.setEnabled(true);
       this.spawner.start();
     }
   }
@@ -376,6 +412,7 @@ export class GameScene extends Phaser.Scene {
     if (pointer.button !== 0) return;
     if (SettingsButton.consumeSceneSuppress()) return;
     if (MoonflowerController.consumeTapSuppress()) return;
+    if (DreamweedController.consumeGrabSuppress()) return;
     if (this.settingsDrawer?.isOpen()) return;
 
     this.pointerDownX = pointer.worldX;
@@ -383,14 +420,36 @@ export class GameScene extends Phaser.Scene {
     this.musicManager.tryUnlock();
     this.soundManager.tryUnlock();
 
+    if (this.dreamweedController?.tryBeginGrab(pointer.worldX, pointer.worldY)) {
+      this.dreamweedGrabActive = true;
+      this.suppressTapOnPointerUp = true;
+      return;
+    }
+
     this.suppressTapOnPointerUp = this.tryPointerTap(pointer.worldX, pointer.worldY);
+  }
+
+  private onPointerMove(pointer: Phaser.Input.Pointer): void {
+    if (!this.dreamweedGrabActive) return;
+    if (this.dreamweedController?.trySwipeCollect(pointer.worldX)) {
+      this.dreamweedGrabActive = false;
+      this.suppressTapOnPointerUp = true;
+    }
   }
 
   private onPointerUp(pointer: Phaser.Input.Pointer): void {
     if (pointer.button !== 0) return;
     if (SettingsButton.consumeSceneSuppress()) return;
     if (MoonflowerController.consumeTapSuppress()) return;
+    if (DreamweedController.consumeGrabSuppress()) return;
     if (this.settingsDrawer?.isOpen()) return;
+
+    if (this.dreamweedGrabActive) {
+      this.dreamweedController?.releaseGrab();
+      this.dreamweedGrabActive = false;
+      this.suppressTapOnPointerUp = true;
+      return;
+    }
 
     if (this.suppressTapOnPointerUp) {
       this.suppressTapOnPointerUp = false;
@@ -540,6 +599,10 @@ export class GameScene extends Phaser.Scene {
     this.showFloatingText(payload.x, payload.y - 32, 'Too Early!', '#ffd700');
   }
 
+  private onDecoyRockHit(): void {
+    this.soundManager.play('decoyRock');
+  }
+
   /** Empty space or decoy — breaks combo; does not apply to heavy-sleeper conversion taps. */
   private recordBadTap(kind: BadTapKind, x: number, y: number): void {
     if (this.isGameOver || this.calibrationMode) return;
@@ -645,6 +708,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.tryHudRunClockEvents();
+    this.dreamweedController?.update(delta);
   }
 
   /** Moonflower hint, sprout, and level pass — keyed to the HUD MM:SS timer. */
@@ -665,8 +729,26 @@ export class GameScene extends Phaser.Scene {
       });
     }
 
+    if (
+      !this.moonflowerHudRevealed &&
+      hudSec >= HUD_RUN_CLOCK.moonflowerHudSec
+    ) {
+      this.moonflowerHudRevealed = true;
+      this.hud.revealMoonflowerHudIcon();
+    }
+
     if (hudSec >= HUD_RUN_CLOCK.moonflowerSproutSec) {
       this.moonflowerController.spawnForRun();
+    }
+
+    if (
+      !this.almostThereShown &&
+      !this.calibrationMode &&
+      !this.levelPassedThisRun &&
+      hudSec >= getAlmostThereSec()
+    ) {
+      this.almostThereShown = true;
+      this.levelPassedBanner?.show({ title: 'Almost There!' });
     }
 
     if (hudSec >= HUD_RUN_CLOCK.levelPassSec) {
@@ -687,7 +769,13 @@ export class GameScene extends Phaser.Scene {
       this.hud.playMoonflowerCollectFly(payload.x, payload.y);
       return;
     }
-    this.hud.setMoonflowerCollectedThisRun(true, false);
+    if (payload.id === 'dreamweed' && payload.x != null && payload.y != null) {
+      this.hud.playDreamweedCollectFly(payload.x, payload.y);
+      return;
+    }
+    if (payload.id === 'moonflower') {
+      this.hud.setMoonflowerCollectedThisRun(true, false);
+    }
   }
 
   private onDuckSpawned(_duck: Duck): void {
@@ -832,6 +920,7 @@ export class GameScene extends Phaser.Scene {
     this.lifeLossCooldown = true;
     this.events.emit(GameEvents.GAME_OVER);
     this.spawner.stop();
+    this.dreamweedController?.stop();
     this.soundManager.stopGameplayBackground();
     this.soundManager.play('gameOver');
 
@@ -911,6 +1000,7 @@ export class GameScene extends Phaser.Scene {
   shutdown(): void {
     this.musicManager?.clearPlaybackInterruptions();
     this.input.off('pointerdown', this.onPointerDown, this);
+    this.input.off('pointermove', this.onPointerMove, this);
     this.input.off('pointerup', this.onPointerUp, this);
     this.events.off('duck-spawned', this.onDuckSpawned, this);
     this.events.off('duck-partial-tap', this.onPartialTap, this);
@@ -919,6 +1009,7 @@ export class GameScene extends Phaser.Scene {
     this.events.off(GameEvents.DUCK_MISSED, this.onDuckMissed, this);
     this.events.off(GameEvents.EARLY_TAP, this.onEarlyTap, this);
     this.events.off(GameEvents.CHARM_COLLECTED, this.onCharmCollected, this);
+    this.events.off(GameEvents.DECOY_ROCK_HIT, this.onDecoyRockHit, this);
     this.events.off(REOPEN_SETTINGS_AFTER_RULES, this.reopenSettingsAfterRules, this);
     this.levelPassedBanner?.destroy();
     this.levelPassedBanner = null;
@@ -938,6 +1029,7 @@ export class GameScene extends Phaser.Scene {
     resetWatchTime();
     resetWatchInstructions();
     this.moonflowerController?.destroy();
+    this.dreamweedController?.destroy();
     this.spawner?.destroy();
     this.settingsDrawer?.destroy();
     this.settingsButton?.destroy();

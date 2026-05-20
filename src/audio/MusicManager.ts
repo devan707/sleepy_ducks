@@ -109,15 +109,17 @@ export class MusicManager {
     if (this.playbackInterruptionCount <= 0) return;
     this.playbackInterruptionCount -= 1;
     if (this.playbackInterruptionCount === 0 && !this.isPlaybackBlocked()) {
-      this.tryResumeActiveTrack();
-      if (
+      const inGameplayMusic =
         this.lastGameplayElapsedSec > 0 &&
         (this.activeTrack === 'gameplay' ||
           this.activeTrack === 'gameplayNight' ||
           this.gameplayMusicTimelineActive ||
-          this.gameplayNightCrossfaded)
-      ) {
+          this.gameplayNightCrossfaded);
+
+      if (inGameplayMusic) {
         this.syncGameplayMusicCrossfade(this.lastGameplayElapsedSec);
+      } else {
+        this.tryResumeActiveTrack();
       }
     }
   }
@@ -149,33 +151,36 @@ export class MusicManager {
     const from = this.clips.gameplay;
     const to = this.clips.gameplayNight;
     if (!this.nightTrackStarted) {
-      if (from.paused) {
-        void from.play().catch(() => {
-          /* Autoplay blocked until gesture. */
-        });
-      }
+      this.resumeClipIfPaused(from);
       return;
     }
-    if (from.volume > 0.001 && from.paused) {
-      void from.play().catch(() => {
-        /* Autoplay blocked until gesture. */
-      });
+    if (from.volume > 0.001) {
+      this.resumeClipIfPaused(from);
     }
-    if (to.paused) {
-      void to.play().catch(() => {
-        /* Autoplay blocked until gesture. */
-      });
-    }
+    this.resumeClipIfPaused(to);
   }
 
   private ensureNightGameplayMusic(): void {
     const to = this.clips.gameplayNight;
     to.volume = this.trackVolume('gameplayNight');
-    if (to.paused) {
-      void to.play().catch(() => {
+    this.resumeClipIfPaused(to);
+  }
+
+  /** Unpause without re-seeking — safe to call repeatedly. */
+  private resumeClipIfPaused(clip: HTMLAudioElement): void {
+    if (clip.paused && !clip.ended) {
+      void clip.play().catch(() => {
         /* Autoplay blocked until gesture. */
       });
     }
+  }
+
+  private isNightMusicLockedIn(): boolean {
+    return (
+      this.gameplayNightCrossfaded &&
+      this.activeTrack === 'gameplayNight' &&
+      this.nightTrackStarted
+    );
   }
 
   /** Effective playback volume for a single track given the current slider value. */
@@ -248,6 +253,8 @@ export class MusicManager {
     this.applyClipVolumes();
     if (!this.musicEnabled) {
       this.resetGameplayCrossfadeState();
+      this.gameplayNightCrossfaded = false;
+      this.nightTrackStarted = false;
       this.pauseAll();
       return;
     }
@@ -282,20 +289,18 @@ export class MusicManager {
   playMenuUi(): void {
     this.resetGameplayCrossfadeState();
     this.gameplayNightCrossfaded = false;
+    this.nightTrackStarted = false;
     this.play('menuUi');
   }
 
   playGameplay(): void {
     this.resetGameplayCrossfadeState();
     this.gameplayNightCrossfaded = false;
+    this.nightTrackStarted = false;
     this.lastGameplayElapsedSec = 0;
     this.play('gameplay');
   }
 
-  /**
-   * Drive day→night music from game elapsed time (pauses with gameplay).
-   * Day: full → fade out 40s–48s. Night: fade in 45s–50s from loop offset.
-   */
   /**
    * Reconcile day/night playback after settings or tab pause (uses live elapsed time).
    */
@@ -305,35 +310,53 @@ export class MusicManager {
 
     const { gameplayNightMusicFadeInEndSec: nightEnd } = DAY_NIGHT;
 
+    if (elapsedSec >= nightEnd) {
+      this.snapToNightMusic();
+      return;
+    }
+
     if (this.gameplayNightCrossfaded && this.activeTrack !== 'gameplayNight') {
       this.gameplayNightCrossfaded = false;
-    }
-
-    if (elapsedSec >= nightEnd && this.activeTrack !== 'gameplayNight') {
-      this.gameplayNightCrossfaded = false;
-      this.nightTrackStarted = false;
-      this.gameplayMusicTimelineActive =
-        elapsedSec >= DAY_NIGHT.gameplayDayMusicFadeOutStartSec;
-    }
-
-    if (
-      elapsedSec >= DAY_NIGHT.gameplayNightMusicFadeInStartSec &&
-      this.clips.gameplayNight.paused &&
-      (this.nightTrackStarted || elapsedSec >= nightEnd)
-    ) {
-      this.nightTrackStarted = false;
     }
 
     this.updateGameplayMusicCrossfade(elapsedSec);
   }
 
+  /** Jump straight to night playback without re-running the fade-in start. */
+  private snapToNightMusic(): void {
+    const from = this.clips.gameplay;
+    const to = this.clips.gameplayNight;
+    const nightVol = this.trackVolume('gameplayNight');
+
+    from.pause();
+    from.currentTime = 0;
+    from.volume = 0;
+
+    to.volume = nightVol;
+
+    if (!this.nightTrackStarted) {
+      this.nightTrackStarted = true;
+      this.seekTrackToStart(to, 'gameplayNight');
+    }
+
+    this.resumeClipIfPaused(to);
+
+    this.activeTrack = 'gameplayNight';
+    this.gameplayNightCrossfaded = true;
+    this.gameplayMusicTimelineActive = false;
+  }
+
+  /**
+   * Drive day→night music from game elapsed time (pauses with gameplay).
+   * Day: full → fade out 40s–48s. Night: fade in 45s–50s from loop offset.
+   */
   updateGameplayMusicCrossfade(elapsedSec: number): void {
     this.lastGameplayElapsedSec = elapsedSec;
     if (this.isPlaybackBlocked()) return;
     if (!this.musicEnabled) return;
 
     if (this.gameplayNightCrossfaded) {
-      if (this.activeTrack === 'gameplayNight') {
+      if (this.isNightMusicLockedIn()) {
         this.ensureNightGameplayMusic();
         return;
       }
@@ -348,6 +371,11 @@ export class MusicManager {
       gameplayNightMusicFadeInStartSec: nightStart,
       gameplayNightMusicFadeInEndSec: nightEnd,
     } = DAY_NIGHT;
+
+    if (elapsedSec >= nightEnd) {
+      this.snapToNightMusic();
+      return;
+    }
 
     if (elapsedSec < dayStart) return;
 
@@ -383,28 +411,24 @@ export class MusicManager {
       this.nightTrackStarted = true;
       this.seekTrackToStart(to, 'gameplayNight');
       to.volume = 0;
-      void to.play().catch(() => {
-        /* Autoplay blocked until gesture. */
-      });
+      this.resumeClipIfPaused(to);
     }
 
     const nightFade = this.fadeT(elapsedSec, nightStart, nightEnd);
     to.volume = nightTargetVol * nightFade;
 
-    if (nightFade > 0 && to.paused) {
-      void to.play().catch(() => {
-        /* Autoplay blocked until gesture. */
-      });
+    if (nightFade > 0) {
+      this.resumeClipIfPaused(to);
     }
 
     if (nightFade >= 1) {
       from.pause();
       from.currentTime = 0;
-      from.volume = dayTargetVol;
+      from.volume = 0;
       to.volume = nightTargetVol;
       this.activeTrack = 'gameplayNight';
       this.gameplayNightCrossfaded = true;
-      this.resetGameplayCrossfadeState();
+      this.gameplayMusicTimelineActive = false;
     }
   }
 
@@ -412,6 +436,7 @@ export class MusicManager {
     this.gameOverMusicVariant = variant;
     this.resetGameplayCrossfadeState();
     this.gameplayNightCrossfaded = false;
+    this.nightTrackStarted = false;
     const track: MusicTrack = variant === 'passed' ? 'menuUi' : 'gameOver';
     this.play(track);
   }
@@ -470,5 +495,6 @@ export class MusicManager {
     }
     this.activeTrack = null;
     this.gameplayNightCrossfaded = false;
+    this.nightTrackStarted = false;
   }
 }
