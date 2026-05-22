@@ -18,6 +18,7 @@ const LEGEND = [
   '  P pause time · , +5s · . +15s · H hide help',
   '?watch=1 — start in watch mode',
   '?calibrate=1 — lip · flow · cliff',
+  '?waterfallFx=0 — disable live waterfall particles (perf A/B)',
   'Magenta = lip · Green = duck clip',
 ];
 

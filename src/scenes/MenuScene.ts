@@ -254,10 +254,7 @@ export class MenuScene extends Phaser.Scene {
     this.starting = true;
     hidePlayerNameOverlay();
     this.settingsDrawer?.close();
-    this.cameras.main.fadeOut(280, 0, 0, 0);
-    this.time.delayedCall(280, () => {
-      this.scene.start(SCENE_KEYS.game);
-    });
+    this.scene.start(SCENE_KEYS.game);
   }
 
   private playEntrance(): void {

@@ -7,6 +7,7 @@ import {
   type LayerPlacementConfig,
 } from '../config/environmentGeometry';
 import { STAGE } from '../config/gameConfig';
+import { isWaterfallFxDisabled } from '../config/performanceProfile';
 import { EnvironmentCalibrator } from '../dev/EnvironmentCalibrator';
 import { FlowAtlasCalibrator } from '../dev/FlowAtlasCalibrator';
 import { LeftCliffCalibrator } from '../dev/LeftCliffCalibrator';
@@ -51,8 +52,9 @@ export class WaterfallStage {
   private scene: Phaser.Scene;
   private layout: StageLayout;
   private flowEffect!: WaterfallFlowEffect;
-  private mistEmitter!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private mistEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private poolSprayWaves: PoolSprayWaves | null = null;
+  private readonly waterfallFxEnabled: boolean;
   private waterfallColumnFx: WaterfallColumnFx | null = null;
   private lipCalibrator: EnvironmentCalibrator | null = null;
   private flowCalibrator: FlowAtlasCalibrator | null = null;
@@ -66,6 +68,7 @@ export class WaterfallStage {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+    this.waterfallFxEnabled = !isWaterfallFxDisabled();
     const lanes = getSpawnLaneBounds();
     this.layout = {
       getLipY: (x: number) => getLipYGame(x),
@@ -84,16 +87,22 @@ export class WaterfallStage {
     this.createCalibrationDim();
     this.flowEffect = new WaterfallFlowEffect(scene);
     this.createForeground();
-    this.rocks = new WaterfallRocks(scene);
-    this.rocks.setSprayMask(resolveLipPoolMask(scene));
-    this.rocks.setStreakMask(getFallsColumnMask(scene));
+    this.rocks = new WaterfallRocks(scene, {
+      particlesEnabled: this.waterfallFxEnabled,
+    });
     const fallsMask = resolveLipPoolMask(scene);
-    this.mistEmitter = createFallsBaseMistEmitter(scene);
-    this.mistEmitter.setMask(fallsMask);
-    this.poolSprayWaves = new PoolSprayWaves(scene);
-    this.poolSprayWaves.setSprayMask(fallsMask);
-    this.waterfallColumnFx = new WaterfallColumnFx(scene);
-    this.waterfallColumnFx.setMask(fallsMask);
+    const columnMask = getFallsColumnMask(scene);
+    this.rocks.setSprayMask(fallsMask);
+    this.rocks.setStreakMask(columnMask);
+
+    if (this.waterfallFxEnabled) {
+      this.mistEmitter = createFallsBaseMistEmitter(scene);
+      this.mistEmitter.setMask(fallsMask);
+      this.poolSprayWaves = new PoolSprayWaves(scene);
+      this.poolSprayWaves.setSprayMask(fallsMask);
+      this.waterfallColumnFx = new WaterfallColumnFx(scene);
+      this.waterfallColumnFx.setMask(fallsMask);
+    }
     this.createLeftCliff();
 
     if (isDevMode()) {
@@ -203,7 +212,7 @@ export class WaterfallStage {
   /** Pause pool-base ambient FX while settings overlay is open. */
   setAmbientFxPaused(paused: boolean): void {
     this.poolSprayWaves?.setPaused(paused);
-    if (this.mistEmitter) {
+    if (this.mistEmitter?.active) {
       this.mistEmitter.emitting = !paused;
     }
   }

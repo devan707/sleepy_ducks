@@ -1,20 +1,33 @@
-{"sessionId":"3ddcde","hypothesisId":"D","location":"MenuScene.ts:tryStartGame","message":"tap","data":{"gameReady":true,"visualsReady":false,"hasRealArt":false},"timestamp":1779305490107}
-{"sessionId":"3ddcde","hypothesisId":"B","location":"GameAssetLoader.ts:loadGameAssets","message":"entry","data":{"sceneKey":"MenuScene","hasRealArt":false,"gameAssetsReady":false,"envReady":false,"loadPromisePending":false},"timestamp":1779305490108}
-{"sessionId":"3ddcde","hypothesisId":"B","location":"GameAssetLoader.ts:loadGameAssets","message":"branch:clear-and-beginLoad","data":{"sceneKey":"MenuScene"},"timestamp":1779305490109}
-{"sessionId":"3ddcde","hypothesisId":"A","location":"GameAssetLoader.ts:beginLoad","message":"queued","data":{"sceneKey":"MenuScene","forceReload":true},"timestamp":1779305490109}
-{"sessionId":"3ddcde","hypothesisId":"A","location":"GameAssetLoader.ts:beginLoad","message":"complete","data":{"sceneKey":"MenuScene","forceReload":true,"totalToLoad":45,"totalComplete":45},"timestamp":1779305491770}
-{"sessionId":"3ddcde","hypothesisId":"D","location":"MenuScene.ts:tryStartGame","message":"menu load done","data":{"gameReady":true,"visualsReady":true},"timestamp":1779305491772}
-{"sessionId":"3ddcde","hypothesisId":"D","location":"MenuScene.ts:startGame","message":"scene.start game","data":{},"timestamp":1779305491772}
-{"sessionId":"3ddcde","hypothesisId":"D","location":"GameScene.ts:create","message":"entry","data":{"sysActive":false,"camAlpha":1,"visualsReady":true,"hasRealArt":true,"hasBg":true,"hasMask":true},"timestamp":1779305491774}
-{"sessionId":"3ddcde","hypothesisId":"D","location":"GameScene.ts:create","message":"initRound immediate","data":{},"timestamp":1779305491775}
-{"sessionId":"3ddcde","hypothesisId":"C","location":"GameScene.ts:create","message":"initRound done","data":{"camAlpha":1,"childCount":78},"timestamp":1779305492482}
-{"sessionId":"3ddcde","hypothesisId":"D","location":"MenuScene.ts:tryStartGame","message":"tap","data":{"gameReady":true,"visualsReady":false,"hasRealArt":false},"timestamp":1779305490107}
-{"sessionId":"3ddcde","hypothesisId":"B","location":"GameAssetLoader.ts:loadGameAssets","message":"entry","data":{"sceneKey":"MenuScene","hasRealArt":false,"gameAssetsReady":false,"envReady":false,"loadPromisePending":false},"timestamp":1779305490108}
-{"sessionId":"3ddcde","hypothesisId":"B","location":"GameAssetLoader.ts:loadGameAssets","message":"branch:clear-and-beginLoad","data":{"sceneKey":"MenuScene"},"timestamp":1779305490109}
-{"sessionId":"3ddcde","hypothesisId":"A","location":"GameAssetLoader.ts:beginLoad","message":"queued","data":{"sceneKey":"MenuScene","forceReload":true},"timestamp":1779305490109}
-{"sessionId":"3ddcde","hypothesisId":"A","location":"GameAssetLoader.ts:beginLoad","message":"complete","data":{"sceneKey":"MenuScene","forceReload":true,"totalToLoad":45,"totalComplete":45},"timestamp":1779305491770}
-{"sessionId":"3ddcde","hypothesisId":"D","location":"MenuScene.ts:tryStartGame","message":"menu load done","data":{"gameReady":true,"visualsReady":true},"timestamp":1779305491772}
-{"sessionId":"3ddcde","hypothesisId":"D","location":"MenuScene.ts:startGame","message":"scene.start game","data":{},"timestamp":1779305491772}
-{"sessionId":"3ddcde","hypothesisId":"D","location":"GameScene.ts:create","message":"entry","data":{"sysActive":false,"camAlpha":1,"visualsReady":true,"hasRealArt":true,"hasBg":true,"hasMask":true},"timestamp":1779305491774}
-{"sessionId":"3ddcde","hypothesisId":"D","location":"GameScene.ts:create","message":"initRound immediate","data":{},"timestamp":1779305491775}
-{"sessionId":"3ddcde","hypothesisId":"C","location":"GameScene.ts:create","message":"initRound done","data":{"camAlpha":1,"childCount":78},"timestamp":1779305492482}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H3","location":"MenuScene.ts:startGame","message":"starting GameScene","data":{"gameReady":true,"hasRealArt":true},"timestamp":1779426873060}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H3","location":"GameScene.ts:create","message":"GameScene create","data":{"hasRealArt":true,"gameAssetsReady":true,"sysActive":false,"useBakedSpray":true},"timestamp":1779426873073}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"GameScene.ts:bootRoundAsync","message":"bootRoundAsync start","data":{"sysActive":false,"sceneActive":false,"sceneStatus":4,"useBakedSpray":true},"timestamp":1779426873074}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:bootRoundAsync","message":"calling initRound","data":{},"timestamp":1779426873077}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:initRound","message":"WaterfallStage created","data":{},"timestamp":1779426874784}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:bootRoundAsync","message":"initRound returned","data":{"childCount":59,"runId":"post-fix"},"timestamp":1779426874983}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"poolSprayBakedLoader.ts","message":"probe result","data":{"present":true,"filesPresent":true},"timestamp":1779426875044}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"poolSprayBakedLoader.ts","message":"atlas load promise started","data":{"completeKey":"filecomplete-atlas-fx-pool-spray-baked","loaderIsLoading":false},"timestamp":1779426875045}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"poolSprayBakedLoader.ts","message":"probe result","data":{"present":true,"filesPresent":true},"timestamp":1779426875049}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"poolSprayBakedLoader.ts","message":"atlas load promise started","data":{"completeKey":"filecomplete-atlas-fx-pool-spray-baked","loaderIsLoading":true},"timestamp":1779426875050}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"poolSprayBakedLoader.ts","message":"atlas load settled","data":{"ok":true,"via":"filecomplete"},"timestamp":1779426875116}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"poolSprayBakedLoader.ts","message":"atlas load settled","data":{"ok":true,"via":"filecomplete"},"timestamp":1779426875118}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"GameScene.ts:bootRoundAsync","message":"pool spray baked load done (async)","data":{"bakedOk":true,"textureExists":true},"timestamp":1779426875120}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H3","location":"MenuScene.ts:startGame","message":"starting GameScene","data":{"gameReady":true,"hasRealArt":true},"timestamp":1779426908854}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H3","location":"GameScene.ts:create","message":"GameScene create","data":{"hasRealArt":true,"gameAssetsReady":true,"sysActive":false,"useBakedSpray":false},"timestamp":1779426908864}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"GameScene.ts:bootRoundAsync","message":"bootRoundAsync start","data":{"sysActive":false,"sceneActive":false,"sceneStatus":4,"useBakedSpray":false},"timestamp":1779426908866}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:bootRoundAsync","message":"calling initRound","data":{},"timestamp":1779426908866}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:initRound","message":"WaterfallStage created","data":{},"timestamp":1779426911207}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:bootRoundAsync","message":"initRound returned","data":{"childCount":78,"runId":"post-fix"},"timestamp":1779426911407}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H3","location":"GameScene.ts:create","message":"GameScene create","data":{"hasRealArt":true,"gameAssetsReady":true,"sysActive":false,"useBakedSpray":true},"timestamp":1779426917053}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"poolSprayBakedLoader.ts","message":"texture already loaded","data":{},"timestamp":1779426917055}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"GameScene.ts:bootRoundAsync","message":"bootRoundAsync start","data":{"sysActive":false,"sceneActive":false,"sceneStatus":4,"useBakedSpray":true},"timestamp":1779426917054}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:bootRoundAsync","message":"calling initRound","data":{},"timestamp":1779426917056}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:initRound","message":"WaterfallStage created","data":{},"timestamp":1779426918892}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:bootRoundAsync","message":"initRound returned","data":{"childCount":52,"runId":"post-fix"},"timestamp":1779426918953}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"GameScene.ts:bootRoundAsync","message":"pool spray baked load done (async)","data":{"bakedOk":true,"textureExists":true},"timestamp":1779426918957}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H3","location":"GameScene.ts:create","message":"GameScene create","data":{"hasRealArt":true,"gameAssetsReady":true,"sysActive":false,"useBakedSpray":true},"timestamp":1779426935169}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"GameScene.ts:bootRoundAsync","message":"bootRoundAsync start","data":{"sysActive":false,"sceneActive":false,"sceneStatus":4,"useBakedSpray":true},"timestamp":1779426935170}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"poolSprayBakedLoader.ts","message":"texture already loaded","data":{},"timestamp":1779426935171}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:bootRoundAsync","message":"calling initRound","data":{},"timestamp":1779426935173}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:initRound","message":"WaterfallStage created","data":{},"timestamp":1779426937139}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H2","location":"GameScene.ts:bootRoundAsync","message":"initRound returned","data":{"childCount":52,"runId":"post-fix"},"timestamp":1779426937192}
+{"sessionId":"3ddcde","runId":"pre-fix","hypothesisId":"H1","location":"GameScene.ts:bootRoundAsync","message":"pool spray baked load done (async)","data":{"bakedOk":true,"textureExists":true},"timestamp":1779426937196}

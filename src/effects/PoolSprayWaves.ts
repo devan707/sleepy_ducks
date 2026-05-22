@@ -1,10 +1,18 @@
 import Phaser from 'phaser';
 import { POOL_SPRAY } from '../config/gameConfig';
+import { tryLoadPoolSprayBakedWhenPresent } from '../assets/poolSprayBakedLoader';
+import {
+  hasPoolSprayBakedAssets,
+  PoolSprayBakedPlayback,
+} from './PoolSprayBakedPlayback';
 import {
   getPoolSprayWaveTuning,
   isMobileGameplayProfile,
+  shouldUseBakedPoolSprayFx,
   type PoolSprayWaveTuning,
 } from '../config/performanceProfile';
+import { PoolSprayBaseGlow } from './PoolSprayBaseGlow';
+import { PoolSprayWaveTiles } from './PoolSprayWaveTiles';
 import {
   buildPoolSprayEmitterXs,
   resolveFallsPoolSprayLine,
@@ -30,30 +38,49 @@ export class PoolSprayWaves {
   private readonly waveTuning: PoolSprayWaveTuning;
   private ambientEmitter: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private ambientLoop: PoolSprayAmbientLoop | null = null;
+  private baseGlow: PoolSprayBaseGlow | null = null;
+  private waveTiles: PoolSprayWaveTiles | null = null;
+  private bakedPlayback: PoolSprayBakedPlayback | null = null;
+  private readonly bakedMobile: boolean;
   private waveTimerLtr: Phaser.Time.TimerEvent | null = null;
   private waveTimerRtl: Phaser.Time.TimerEvent | null = null;
   private microTimer: Phaser.Time.TimerEvent | null = null;
   private burstTimers: Phaser.Time.TimerEvent[] = [];
   private microActive = true;
   private fxPaused = false;
+  private sprayMask: Phaser.Display.Masks.GeometryMask | null = null;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(
+    scene: Phaser.Scene,
+    options?: { forceLiveParticles?: boolean },
+  ) {
     this.scene = scene;
+    const forceLive = options?.forceLiveParticles === true;
+    this.bakedMobile = !forceLive && shouldUseBakedPoolSprayFx();
     this.waveTuning = getPoolSprayWaveTuning(POOL_SPRAY);
     ensurePoolSprayBubbleTexture(scene);
     this.line = resolveFallsPoolSprayLine(scene);
     this.buildEmitters();
-    this.scheduleWave('ltr', Phaser.Math.Between(120, 320));
-    this.scheduleWave(
-      'rtl',
-      Phaser.Math.Between(120, 320) + POOL_SPRAY.reverseWavePhaseMs,
-    );
-    this.startMicroBursts();
+    if (this.bakedMobile && !this.bakedPlayback) {
+      void this.tryUpgradeToBaked();
+    }
+    if (!this.bakedMobile) {
+      this.scheduleWave('ltr', Phaser.Math.Between(120, 320));
+      this.scheduleWave(
+        'rtl',
+        Phaser.Math.Between(120, 320) + POOL_SPRAY.reverseWavePhaseMs,
+      );
+      this.startMicroBursts();
+    }
   }
 
   setSprayMask(mask: Phaser.Display.Masks.GeometryMask): void {
+    this.sprayMask = mask;
     this.ambientEmitter?.setMask(mask);
     this.ambientLoop?.setMask(mask);
+    this.baseGlow?.setMask(mask);
+    this.waveTiles?.setMask(mask);
+    this.bakedPlayback?.setMask(mask);
     for (const emitter of this.burstEmitters) {
       emitter.setMask(mask);
     }
@@ -65,10 +92,16 @@ export class PoolSprayWaves {
       this.ambientEmitter.emitting = !paused;
     }
     this.ambientLoop?.setPaused(paused);
+    this.baseGlow?.setPaused(paused);
+    this.waveTiles?.setPaused(paused);
+    this.bakedPlayback?.setPaused(paused);
   }
 
   update(time: number, delta: number): void {
+    this.bakedPlayback?.update(time, delta);
+    this.baseGlow?.update(time, delta);
     this.ambientLoop?.update(time, delta);
+    this.waveTiles?.update(time, delta);
   }
 
   destroy(): void {
@@ -87,10 +120,23 @@ export class PoolSprayWaves {
     this.ambientEmitter = null;
     this.ambientLoop?.destroy();
     this.ambientLoop = null;
+    this.baseGlow?.destroy();
+    this.baseGlow = null;
+    this.waveTiles?.destroy();
+    this.waveTiles = null;
+    this.bakedPlayback?.destroy();
+    this.bakedPlayback = null;
     for (const emitter of this.burstEmitters) {
       emitter.destroy();
     }
     this.burstEmitters.length = 0;
+  }
+
+  /** Particle emitters for dev bake capture (RenderTexture snapshot). */
+  getLiveCaptureEmitters(): Phaser.GameObjects.Particles.ParticleEmitter[] {
+    const list = [...this.burstEmitters];
+    if (this.ambientEmitter) list.push(this.ambientEmitter);
+    return list;
   }
 
   private sprayY(): number {
@@ -115,11 +161,46 @@ export class PoolSprayWaves {
     };
   }
 
+  private async tryUpgradeToBaked(): Promise<void> {
+    const ok = await tryLoadPoolSprayBakedWhenPresent(this.scene);
+    if (!ok || this.scene.sys.settings.status === Phaser.Scenes.SHUTDOWN) return;
+    if (!hasPoolSprayBakedAssets(this.scene)) return;
+    if (this.bakedPlayback) return;
+    this.upgradeToBakedPlayback();
+  }
+
+  private upgradeToBakedPlayback(): void {
+    this.baseGlow?.destroy();
+    this.baseGlow = null;
+    this.ambientLoop?.destroy();
+    this.ambientLoop = null;
+    this.waveTiles?.destroy();
+    this.waveTiles = null;
+
+    const y = this.sprayY();
+    this.bakedPlayback = new PoolSprayBakedPlayback(this.scene, this.line, y);
+    if (this.sprayMask) {
+      this.bakedPlayback.setMask(this.sprayMask);
+    }
+  }
+
   private buildEmitters(): void {
     const cfg = POOL_SPRAY;
     const y = this.sprayY();
     const inset = cfg.spanInsetPx;
     const zoneW = Math.max(24, this.line.width - inset * 2);
+
+    if (this.bakedMobile && hasPoolSprayBakedAssets(this.scene)) {
+      this.bakedPlayback = new PoolSprayBakedPlayback(this.scene, this.line, y);
+      return;
+    }
+
+    if (this.bakedMobile) {
+      this.baseGlow = new PoolSprayBaseGlow(this.scene, this.line, y);
+      this.ambientLoop = new PoolSprayAmbientLoop(this.scene, this.line, y);
+      this.waveTiles = new PoolSprayWaveTiles(this.scene, this.line, y);
+      return;
+    }
 
     if (isMobileGameplayProfile()) {
       this.ambientLoop = new PoolSprayAmbientLoop(this.scene, this.line, y);

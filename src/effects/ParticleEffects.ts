@@ -164,9 +164,11 @@ export function createRockSprayEmitters(
 export function createRockStreakEmitters(
   scene: Phaser.Scene,
   rocks: readonly RockSprayAnchor[],
+  emittersPerRock: number = ROCK_OBSTACLES.streak.emittersPerRock,
 ): Phaser.GameObjects.Particles.ParticleEmitter[] {
   const placement = ROCK_OBSTACLES.streak;
   const emitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
+  const count = Math.max(1, emittersPerRock);
 
   for (const rock of rocks) {
     const spawnY = rock.hitBottomY + placement.spawnBelowHitBottomPx;
@@ -174,7 +176,6 @@ export function createRockStreakEmitters(
     const inset = rock.hitRadiusX * placement.spanInsetFrac;
     const lo = rock.x - halfW + inset;
     const hi = rock.x + halfW - inset;
-    const count = placement.emittersPerRock;
 
     for (let i = 0; i < count; i++) {
       const t = count > 1 ? i / (count - 1) : 0.5;

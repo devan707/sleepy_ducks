@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ROCK_OBSTACLES, type RockObstacleId } from '../config/gameConfig';
+import { getRockStreakEmittersPerRock } from '../config/performanceProfile';
 import { rockAnimKeyForId, rockAtlasKeyForId } from '../config/rockAssets';
 import { createRockSprayEmitters, createRockStreakEmitters } from '../effects/ParticleEffects';
 
@@ -46,7 +47,7 @@ export class WaterfallRocks {
   private sprayEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
   private streakEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, options?: { particlesEnabled?: boolean }) {
     this.obstacles = ROCK_OBSTACLES.placements.map(resolveRockObstacle);
 
     for (const placement of ROCK_OBSTACLES.placements) {
@@ -71,8 +72,14 @@ export class WaterfallRocks {
       this.sprites.push(sprite);
     }
 
+    if (options?.particlesEnabled === false) return;
+
     this.sprayEmitters = createRockSprayEmitters(scene, this.obstacles);
-    this.streakEmitters = createRockStreakEmitters(scene, this.obstacles);
+    this.streakEmitters = createRockStreakEmitters(
+      scene,
+      this.obstacles,
+      getRockStreakEmittersPerRock(ROCK_OBSTACLES.streak.emittersPerRock),
+    );
   }
 
   /** Clip rock flank spray to the pool side of the lip. */

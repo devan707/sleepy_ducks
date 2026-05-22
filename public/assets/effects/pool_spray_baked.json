@@ -1,0 +1,255 @@
+{
+  "frames": {
+    "frame_00": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_01": {
+      "frame": {
+        "x": 224,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_02": {
+      "frame": {
+        "x": 448,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_03": {
+      "frame": {
+        "x": 672,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_04": {
+      "frame": {
+        "x": 896,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_05": {
+      "frame": {
+        "x": 1120,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_06": {
+      "frame": {
+        "x": 1344,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_07": {
+      "frame": {
+        "x": 1568,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_08": {
+      "frame": {
+        "x": 1792,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_09": {
+      "frame": {
+        "x": 2016,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_10": {
+      "frame": {
+        "x": 2240,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    },
+    "frame_11": {
+      "frame": {
+        "x": 2464,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "rotated": false,
+      "trimmed": false,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 224,
+        "h": 48
+      },
+      "sourceSize": {
+        "w": 224,
+        "h": 48
+      }
+    }
+  },
+  "meta": {
+    "app": "Sleepy Ducks pool spray bake",
+    "version": "1.0",
+    "image": "pool_spray_baked.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 2688,
+      "h": 48
+    },
+    "scale": "1"
+  }
+}

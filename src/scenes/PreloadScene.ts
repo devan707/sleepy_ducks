@@ -9,6 +9,8 @@ import {
   type AssetManifestEntry,
 } from '../config/assets';
 import { GAME_HEIGHT, GAME_WIDTH, SCENE_KEYS } from '../config/gameConfig';
+import { isPoolSprayBakeUrlParam } from '../dev/poolSprayBakeMode';
+import { POOL_SPRAY_BAKE_SCENE_KEY } from './PoolSprayBakeScene';
 import { LoadingBar } from '../ui/LoadingBar';
 const DEPTH = {
   bar: 1,
@@ -72,6 +74,10 @@ export class PreloadScene extends Phaser.Scene {
       MusicManager.getInstance().tryUnlock();
     });
     this.time.delayedCall(80, () => {
+      if (isPoolSprayBakeUrlParam()) {
+        this.scene.start(POOL_SPRAY_BAKE_SCENE_KEY);
+        return;
+      }
       this.scene.start(SCENE_KEYS.menu);
     });
   }

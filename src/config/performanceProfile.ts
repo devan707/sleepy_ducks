@@ -1,4 +1,37 @@
 let cachedMobile: boolean | null = null;
+let cachedWaterfallFxDisabled: boolean | null = null;
+
+/**
+ * Disable live waterfall particles for perf A/B testing on device.
+ * Hosted PWA: `https://sleepyducks.app/?waterfallFx=0`
+ */
+export function isWaterfallFxDisabled(): boolean {
+  if (cachedWaterfallFxDisabled !== null) return cachedWaterfallFxDisabled;
+  if (typeof window === 'undefined') {
+    cachedWaterfallFxDisabled = false;
+    return cachedWaterfallFxDisabled;
+  }
+  const v = new URLSearchParams(window.location.search).get('waterfallFx');
+  cachedWaterfallFxDisabled = v === '0' || v === 'off' || v === 'false';
+  return cachedWaterfallFxDisabled;
+}
+
+/** Mobile pool-base FX uses tile loops instead of burst particle emitters. */
+export function shouldUseBakedPoolSprayFx(): boolean {
+  return isMobileGameplayProfile() && !isWaterfallFxDisabled();
+}
+
+/** Lip column streak emitters — fewer on mobile, still real particles (not tiles). */
+export function getFallsStreakEmitterCount(desktopCount: number): number {
+  if (!isMobileGameplayProfile()) return desktopCount;
+  return Math.min(desktopCount, 6);
+}
+
+/** Micro-streaks below each rock foot. */
+export function getRockStreakEmittersPerRock(desktopCount: number): number {
+  if (!isMobileGameplayProfile()) return desktopCount;
+  return Math.min(desktopCount, 2);
+}
 
 /** Touch-first phones and small tablets — desktop always false. */
 export function isMobileGameplayProfile(): boolean {

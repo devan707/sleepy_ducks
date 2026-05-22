@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { AssetManager } from '../assets/AssetManager';
-import { loadGameAssets } from '../assets/GameAssetLoader';
+import { loadGameAssets, resetGameAssetLoadState } from '../assets/GameAssetLoader';
+import { tryLoadPoolSprayBakedWhenPresent } from '../assets/poolSprayBakedLoader';
+import { shouldUseBakedPoolSprayFx } from '../config/performanceProfile';
 import { registerDuckAnimations } from '../assets/DuckAnimations';
 import { ASSET_KEYS } from '../config/assets';
 import { MusicManager } from '../audio/MusicManager';
@@ -144,6 +146,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    const cam = this.cameras.main;
+    cam.resetFX();
+    cam.setAlpha(1);
+    cam.setBackgroundColor(COLORS.skyBottom);
+
     if (!AssetManager.hasRealGameplayArt()) {
       const wait = this.add
         .text(this.scale.width / 2, this.scale.height / 2, 'Loading…', {
@@ -154,15 +161,53 @@ export class GameScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(200);
 
-      loadGameAssets(this).then(() => {
-        if (!this.scene.isActive()) return;
-        wait.destroy();
-        this.initRound();
-      });
+      void loadGameAssets(this)
+        .then(() => {
+          if (this.isSceneShutDown()) return;
+          wait.destroy();
+          this.bootRound();
+        })
+        .catch((err: unknown) => {
+          console.error('Gameplay load failed:', err);
+          if (this.isSceneShutDown()) return;
+          wait.destroy();
+          this.bootRound();
+        });
       return;
     }
 
-    this.initRound();
+    this.bootRound();
+  }
+
+  /** Phaser reports isActive false during create(); only skip after shutdown. */
+  private isSceneShutDown(): boolean {
+    return this.sys.settings.status === Phaser.Scenes.SHUTDOWN;
+  }
+
+  private bootRound(): void {
+    void this.bootRoundAsync();
+  }
+
+  private async bootRoundAsync(): Promise<void> {
+    try {
+      if (shouldUseBakedPoolSprayFx()) {
+        void tryLoadPoolSprayBakedWhenPresent(this);
+      }
+      if (this.isSceneShutDown()) return;
+      this.initRound();
+    } catch (err) {
+      console.error('initRound failed:', err);
+      if (this.isSceneShutDown()) return;
+      this.add
+        .text(this.scale.width / 2, this.scale.height / 2, 'Could not start game.\nReload the page.', {
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '18px',
+          color: '#ffffff',
+          align: 'center',
+        })
+        .setOrigin(0.5)
+        .setDepth(500);
+    }
   }
 
   private initRound(): void {
@@ -202,7 +247,6 @@ export class GameScene extends Phaser.Scene {
     this.tapInputLockedUntil = 0;
 
     this.cameras.main.setBackgroundColor(COLORS.skyBottom);
-    this.cameras.main.fadeIn(300, 0, 0, 0);
 
     registerDuckAnimations(this);
 
@@ -392,7 +436,7 @@ export class GameScene extends Phaser.Scene {
     hidePlayerNameOverlay();
     this.settingsDrawer.close();
     this.time.delayedCall(260, () => {
-      if (!this.scene.isActive()) return;
+        if (this.isSceneShutDown()) return;
       this.scene.launch(SCENE_KEYS.rules, { returnToGame: true });
       this.scene.bringToTop(SCENE_KEYS.rules);
     });
@@ -1321,12 +1365,12 @@ export class GameScene extends Phaser.Scene {
     playSuccessTransition(
       this,
       () => {
-        if (!this.scene.isActive()) return;
+        if (this.isSceneShutDown()) return;
         this.scene.launch(SCENE_KEYS.gameOver, data);
         this.scene.bringToTop(SCENE_KEYS.game);
       },
       () => {
-        if (!this.scene.isActive()) return;
+        if (this.isSceneShutDown()) return;
         this.scene.stop();
       },
     );
@@ -1395,6 +1439,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    resetGameAssetLoadState();
     hidePlayerNameOverlay();
     this.cancelHeartBalloonTimers();
     if (this.onAnonUnlockPointer) {

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { FALLS_STREAK_BUBBLES } from '../config/gameConfig';
+import { getFallsStreakEmitterCount } from '../config/performanceProfile';
 import { sampleLipEmitPoints } from '../objects/EnvironmentLayout';
 import { createFallsStreakEmitter } from './ParticleEffects';
 
@@ -28,7 +29,8 @@ export class WaterfallColumnFx {
 
   private buildStreakBubbles(): void {
     const cfg = FALLS_STREAK_BUBBLES;
-    const lip = sampleLipEmitPoints(cfg.emitterCount);
+    const count = getFallsStreakEmitterCount(cfg.emitterCount);
+    const lip = sampleLipEmitPoints(count);
 
     for (const point of lip) {
       this.emitters.push(

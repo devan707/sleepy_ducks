@@ -13,12 +13,19 @@ import {
   type AssetKey,
   type AssetManifestEntry,
 } from '../config/assets';
+import { resetPoolSprayBakedLoadState } from './poolSprayBakedLoader';
 type ProgressCallback = (progress: number) => void;
 
 const LOAD_TIMEOUT_MS = 180_000;
 const progressListeners = new Set<ProgressCallback>();
 
 let loadPromise: Promise<void> | null = null;
+
+/** Clear in-flight load when GameScene shuts down so the next run can start fresh. */
+export function resetGameAssetLoadState(): void {
+  loadPromise = null;
+  resetPoolSprayBakedLoadState();
+}
 
 export function queueGameAssets(loader: Phaser.Loader.LoaderPlugin): void {
   for (const entry of GAME_MANIFEST) {

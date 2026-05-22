@@ -21,6 +21,7 @@ export const ASSET_KEYS = {
   atlasBalloonPop: 'atlas-balloon-pop',
   fxMist: 'fx-mist',
   fxSplash: 'fx-splash',
+  fxPoolSprayBaked: 'fx-pool-spray-baked',
   uiHeart: 'ui-heart',
   homeWaterfall: 'ui-home-waterfall',
   titleLogo: 'ui-title-logo',

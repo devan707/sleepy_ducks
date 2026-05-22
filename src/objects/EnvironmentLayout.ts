@@ -140,7 +140,11 @@ export function createFlowBitmapMask(scene: Phaser.Scene): Phaser.Display.Masks.
   }
 
   if (!scene.textures.exists(ENV_KEYS.waterChannelMask)) {
-    throw new Error(`Missing texture: ${ENV_KEYS.waterChannelMask}`);
+    const g = scene.add.graphics();
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    g.generateTexture(ENV_KEYS.waterChannelMask, GAME_WIDTH, GAME_HEIGHT);
+    g.destroy();
   }
 
   flowMaskImage = scene.add.image(0, 0, ENV_KEYS.waterChannelMask);
