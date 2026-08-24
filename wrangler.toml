@@ -14,4 +14,5 @@ directory = "./dist"
 # then replace the id below with the one it prints. See docs/DEPLOY.md.
 [[kv_namespaces]]
 binding = "WAITLIST_KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "10a34c6af5e54e2f8f5ddd2dddfbbc02"
+
