@@ -50,13 +50,35 @@ Export collected emails any time with `npm run waitlist:export` (requires
 
 ### Analytics — optional PostHog env vars
 
-Set these as Cloudflare **Build** environment variables (they're inlined at
-build time, so a Preview/Production split needs the same vars in both):
+These are `VITE_`-prefixed, so Vite only ever reads them while `npm run
+build` is running — Cloudflare has to have them available *during the
+build step*, not just available to the deployed Worker afterward.
+
+Cloudflare has two separate "Variables and secrets" lists that look
+identical but do different things — easy to add these to the wrong one:
+
+- **Settings → Runtime → Variables and secrets** — only visible to the
+  Worker's own code (`env.SOMETHING` in `worker/index.ts`) once it's
+  already running. **Not this one.** Adding a var here creates a new
+  "Version" instantly (shows up in Deployments as "Updated secret: ..." by
+  you, via Dashboard) — but it reuses the already-built JS file, so Vite
+  never sees it.
+- **Settings → Build → Variables and secrets** — the list `NODE_VERSION`
+  is already in. **This one.** Add both vars here, next to it:
 
 | Variable | Value | Notes |
 |---|---|---|
-| `VITE_POSTHOG_KEY` | your PostHog project API key | Public/client-safe key, not a secret. Leave unset to ship with analytics disabled. |
+| `VITE_POSTHOG_KEY` | your PostHog project API key | Public/client-safe key — fine as a "Variable", doesn't need to be a "Secret". Leave unset to ship with analytics disabled. |
 | `VITE_POSTHOG_HOST` | `https://us.i.posthog.com` | Or your region/self-hosted host. Optional — defaults to US cloud. |
+
+Either way, **saving the variable doesn't rebuild anything by itself.**
+Cloudflare only reads it the next time an actual build runs — an edit in
+Settings just changes the setting for next time. So after adding it, push
+any commit (or use the `...` menu on a real build entry in Deployments —
+not a "by Dashboard" one — if it offers a retry) to get a fresh build
+that actually bakes the key in. You can confirm it worked by checking
+that the built JS filename under `dist/assets/` changed (Vite hashes it
+from the file's content, so an unchanged filename means unchanged code).
 
 See [`.env.example`](../.env.example) for local dev.
 
