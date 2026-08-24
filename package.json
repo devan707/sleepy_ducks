@@ -26,11 +26,11 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^7.0.0",
-    "@cloudflare/workers-types": "^5.20260823.1",
+    "@cloudflare/workers-types": "4.20260702.1",
     "sharp": "^0.33.5",
     "typescript": "^5.7.2",
     "vite": "^6.0.3",
-    "wrangler": "^4.125.0"
+    "wrangler": "4.86.0"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
