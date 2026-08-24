@@ -14,14 +14,22 @@ import {
   setWaitlistEmailValue,
   showWaitlistEmailOverlay,
 } from './waitlistEmailOverlay';
+import {
+  hidePrivacyLinkOverlay,
+  removePrivacyLinkOverlay,
+  showPrivacyLinkOverlay,
+} from './privacyLinkOverlay';
 
 const SOURCE = 'level_2_coming_soon';
 const CONSENT_VERSION = 'v1';
 
 const PANEL_WIDTH = 326;
-const FORM_PANEL_HEIGHT = 392;
+// Tall enough to clear the retry button's tap target below it — see the
+// comment above the button in renderForm() for why that needs this much room.
+const FORM_PANEL_HEIGHT = 540;
 const SUCCESS_PANEL_HEIGHT = 236;
 const EMAIL_FIELD = { width: 254, height: 44 };
+const PRIVACY_LINK_FIELD = { width: 140, height: 22 };
 
 export type Level2ComingSoonPanelOptions = {
   depth: number;
@@ -69,6 +77,7 @@ export class Level2ComingSoonPanel {
   private openFlag = false;
   private submitToken = 0;
   private emailFieldRect: { x: number; y: number; w: number; h: number } | null = null;
+  private privacyLinkRect: { x: number; y: number; w: number; h: number } | null = null;
   private resizeHandler: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene, opts: Level2ComingSoonPanelOptions) {
@@ -103,7 +112,10 @@ export class Level2ComingSoonPanel {
       { dedupeKey: this.opts.runId },
     );
 
-    this.resizeHandler = () => this.repositionEmailOverlay();
+    this.resizeHandler = () => {
+      this.repositionEmailOverlay();
+      this.repositionPrivacyLink();
+    };
     this.scene.scale.on('resize', this.resizeHandler);
   }
 
@@ -112,6 +124,7 @@ export class Level2ComingSoonPanel {
     this.openFlag = false;
     this.submitToken += 1; // invalidate any in-flight submit
     hideWaitlistEmailOverlay();
+    hidePrivacyLinkOverlay();
     if (this.resizeHandler) {
       this.scene.scale.off('resize', this.resizeHandler);
       this.resizeHandler = null;
@@ -126,6 +139,7 @@ export class Level2ComingSoonPanel {
   destroy(): void {
     this.close();
     removeWaitlistEmailOverlay();
+    removePrivacyLinkOverlay();
   }
 
   private clearContent(): void {
@@ -133,6 +147,7 @@ export class Level2ComingSoonPanel {
     this.contentNodes = [];
     this.replayButton = null;
     this.emailFieldRect = null;
+    this.privacyLinkRect = null;
   }
 
   private render(): void {
@@ -142,9 +157,11 @@ export class Level2ComingSoonPanel {
     if (this.state === 'success') {
       this.renderSuccess();
       hideWaitlistEmailOverlay();
+      hidePrivacyLinkOverlay();
     } else {
       this.renderForm();
       this.repositionEmailOverlay();
+      this.repositionPrivacyLink();
       setWaitlistEmailDisabled(this.state === 'submitting');
     }
   }
@@ -156,6 +173,15 @@ export class Level2ComingSoonPanel {
     }
     const r = this.emailFieldRect;
     showWaitlistEmailOverlay(this.scene.game, r.x, r.y, r.w, r.h);
+  }
+
+  private repositionPrivacyLink(): void {
+    if (!this.openFlag || !this.privacyLinkRect) {
+      hidePrivacyLinkOverlay();
+      return;
+    }
+    const r = this.privacyLinkRect;
+    showPrivacyLinkOverlay(this.scene.game, r.x, r.y, r.w, r.h);
   }
 
   private addContent(...nodes: Phaser.GameObjects.GameObject[]): void {
@@ -246,22 +272,36 @@ export class Level2ComingSoonPanel {
     this.addContent(disclaimer);
 
     this.addContent(
-      createTextLink(this.scene, cx, panelTop + 300, 'Not now', () => this.handleClose(), 1, {
+      createTextLink(this.scene, cx, panelTop + 286, 'Not now', () => this.handleClose(), 1, {
         fontSize: '14px',
         strokeThickness: 2,
         color: '#cfe6f4',
       }),
     );
 
+    this.privacyLinkRect = {
+      x: cx - PRIVACY_LINK_FIELD.width / 2,
+      y: panelTop + 312 - PRIVACY_LINK_FIELD.height / 2,
+      w: PRIVACY_LINK_FIELD.width,
+      h: PRIVACY_LINK_FIELD.height,
+    };
+
+    // FloatingAnimButton's tap target is sized to the source texture (a
+    // square canvas padded around the visible pill, ~168x168 for this
+    // displayWidth), not the visible pill shape — so its hit box reaches
+    // roughly 90px above and below this button's center. "Not now" and the
+    // Privacy Policy link above must clear that, hence the tall panel and
+    // the gap here (a real bug found in testing: without this gap, taps on
+    // "Not now" were silently swallowed by this button instead).
     this.replayButton = new FloatingAnimButton(
       this.scene,
       cx,
-      panelTop + 352,
+      panelTop + 434,
       ASSET_KEYS.uiRetry,
       null,
       {
         depth: 1,
-        displayWidth: 168,
+        displayWidth: 150,
         autoFloat: false,
         interactive: true,
         onClick: () => this.handleReplay(),

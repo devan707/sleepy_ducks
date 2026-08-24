@@ -8,6 +8,7 @@
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#0e1e28" />
+    <meta name="author" content="Mountain Maker Studio" />
     <meta
       name="description"
       content="Tap sleeping ducks before they fall into the waterfall. A mobile arcade game — best in portrait on your phone."
@@ -140,6 +141,23 @@
         height: 1px;
         opacity: 0;
         pointer-events: none;
+      }
+      .sd-privacy-link {
+        display: none;
+        position: fixed;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        color: #9fc0d6;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        touch-action: manipulation;
+        z-index: 10000;
+      }
+      .sd-privacy-link:active {
+        color: #ffe566;
       }
       .sd-install-prompt {
         position: fixed;

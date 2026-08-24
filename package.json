@@ -2,6 +2,7 @@
   "name": "sleepy-ducks",
   "private": true,
   "version": "1.0.0",
+  "author": "Mountain Maker Studio",
   "type": "module",
   "engines": {
     "node": ">=20"
