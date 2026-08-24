@@ -1,6 +1,6 @@
 # Sleepy Ducks
 
-Mobile-first arcade game: tap sleeping ducks before they fall into the waterfall. Built with **Phaser 3**, **TypeScript**, **Vite**, and **Capacitor**.
+Mobile-first arcade game: tap sleeping ducks before they fall into the waterfall. Built with **Phaser 3**, **TypeScript**, **Vite**, and **Capacitor**. Made by Mountain Maker Studio.
 
 ## Play online
 

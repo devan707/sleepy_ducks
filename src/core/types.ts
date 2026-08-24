@@ -14,6 +14,8 @@ export interface GameOverData {
   outcome: GameOverOutcome;
   /** When true, end screen UI is built at full opacity (revealed after pass overlay). */
   skipEntrance?: boolean;
+  /** Unique id for this Level 1 attempt — ties analytics events to one run. */
+  runId: string;
 }
 
 /** Future: hook for meta-progression (unlocks, XP, etc.). */

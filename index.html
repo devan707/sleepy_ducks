@@ -8,6 +8,7 @@
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#0e1e28" />
+    <meta name="author" content="Mountain Maker Studio" />
     <meta
       name="description"
       content="Tap sleeping ducks before they fall into the waterfall. A mobile arcade game — best in portrait on your phone."
@@ -103,6 +104,60 @@
       .sd-player-name-input::placeholder {
         color: rgba(255, 255, 255, 0.55);
         font-weight: 600;
+      }
+      .sd-waitlist-email-input {
+        display: none;
+        position: fixed;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0 12px;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: #ffffff;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        outline: none;
+        pointer-events: auto;
+        touch-action: manipulation;
+        -webkit-user-select: text;
+        user-select: text;
+        z-index: 10000;
+        caret-color: #ffe566;
+      }
+      .sd-waitlist-email-input::placeholder {
+        color: rgba(255, 255, 255, 0.55);
+        font-weight: 500;
+      }
+      .sd-waitlist-email-input:disabled {
+        opacity: 0.6;
+      }
+      .sd-waitlist-honeypot {
+        position: fixed;
+        left: -9999px;
+        top: -9999px;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .sd-privacy-link {
+        display: none;
+        position: fixed;
+        align-items: center;
+        justify-content: center;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        color: #9fc0d6;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        touch-action: manipulation;
+        z-index: 10000;
+      }
+      .sd-privacy-link:active {
+        color: #ffe566;
       }
       .sd-install-prompt {
         position: fixed;

@@ -30,8 +30,9 @@ import {
   ensureLilitaFont,
   lilitaDisplayStyle,
 } from '../ui/uiChrome';
-import { GameplayBottomToast } from '../ui/GameplayBottomToast';
 import { hidePlayerNameOverlay } from '../ui/playerNameOverlay';
+import { Level2ComingSoonPanel } from '../ui/Level2ComingSoonPanel';
+import { trackEvent } from '../analytics/analytics';
 
 const DEPTH = {
   bg: 0,
@@ -82,17 +83,20 @@ export class GameOverScene extends Phaser.Scene {
   private settingsDrawer!: SettingsDrawer;
   private settingsButton!: SettingsButton;
   private masterMuteButton!: MasterMuteButton;
-  private bottomToast!: GameplayBottomToast;
   private banner!: Phaser.GameObjects.Image;
   private scoreCard: EndScreenScoreCard | null = null;
   private primaryButton!: FloatingAnimButton;
   private secondaryButton: FloatingAnimButton | null = null;
+  private level2Panel: Level2ComingSoonPanel | null = null;
+  private runId = '';
+  private leavingViaRetry = false;
 
   constructor() {
     super(SCENE_KEYS.gameOver);
   }
 
   create(data: GameOverData): void {
+    this.runId = data.runId;
     ensureAppActive(this.game);
     this.cameras.main.setBackgroundColor('#1a3a4a');
     this.soundManager = SoundManager.forScene(this);
@@ -125,8 +129,6 @@ export class GameOverScene extends Phaser.Scene {
     ) {
       this.masterMuteButton.refreshIcon();
     }
-    this.bottomToast = new GameplayBottomToast(this);
-
     if (data.outcome === 'failed') {
       this.cameras.main.fadeIn(220, 0, 0, 0);
     }
@@ -450,6 +452,11 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   private startRetryGame(): void {
+    // Guards against a double tap (or the results-screen + panel retry
+    // buttons both firing) calling scene.start() twice, which would boot
+    // GameScene twice and double-fire "level_started" with two run ids.
+    if (this.leavingViaRetry) return;
+    this.leavingViaRetry = true;
     resetGameplayPointerSuppress();
     this.soundManager.resumeGameplaySfx();
     this.soundManager.tryUnlock();
@@ -471,7 +478,7 @@ export class GameOverScene extends Phaser.Scene {
         displayWidth: RETRY_BTN_WIDTH,
         autoFloat: false,
         interactive: true,
-        onClick: () => this.startRetryGame(),
+        onClick: () => this.retryFromResultsScreen(),
       },
     );
 
@@ -495,7 +502,7 @@ export class GameOverScene extends Phaser.Scene {
         autoFloat: false,
         floatPhaseMs: 0,
         interactive: true,
-        onClick: () => this.startRetryGame(),
+        onClick: () => this.retryFromResultsScreen(),
       },
     );
 
@@ -513,10 +520,39 @@ export class GameOverScene extends Phaser.Scene {
         interactive: true,
         onClick: () => {
           this.soundManager.tryUnlock();
-          this.bottomToast.show({ text: 'Next level coming soon' });
+          trackEvent(
+            'next_level_clicked',
+            { from_level: 1, target_level: 2, run_id: this.runId },
+            { dedupeKey: this.runId },
+          );
+          this.openLevel2Panel();
         },
       },
     );
+  }
+
+  private openLevel2Panel(): void {
+    if (!this.level2Panel) {
+      this.level2Panel = new Level2ComingSoonPanel(this, {
+        depth: DEPTH.ui + 30,
+        runId: this.runId,
+        onReplay: () => this.retryFromLevel2Panel(),
+      });
+    }
+    this.level2Panel.open();
+  }
+
+  private retryFromResultsScreen(): void {
+    trackEvent(
+      'replay_clicked',
+      { level: 1, source: 'results_screen', run_id: this.runId },
+      { dedupeKey: this.runId },
+    );
+    this.startRetryGame();
+  }
+
+  private retryFromLevel2Panel(): void {
+    this.startRetryGame();
   }
 
   private createBackHomeLink(cx: number, menuY: number): void {
@@ -573,7 +609,7 @@ export class GameOverScene extends Phaser.Scene {
     this.scoreCard?.destroy();
     this.primaryButton?.destroy();
     this.secondaryButton?.destroy();
-    this.bottomToast?.destroy();
+    this.level2Panel?.destroy();
     this.soundManager?.detach();
   }
 }

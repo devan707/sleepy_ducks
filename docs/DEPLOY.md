@@ -28,8 +28,37 @@ Without that block, `wrangler deploy` looks for a Worker script and the deploy s
 
 - **Deploy Hooks** — optional manual triggers
 - **Build cache** — leave enabled
-- **Bindings** — none needed (no database/KV)
 - **API token** — Cloudflare manages this when you connected Git
+
+### Level 2 waitlist — required KV binding
+
+The waitlist signup form (`worker/index.ts`) needs a Workers KV namespace.
+One-time setup:
+
+```bash
+npx wrangler login
+npx wrangler kv namespace create WAITLIST_KV
+```
+
+Copy the `id` it prints into [`wrangler.toml`](../wrangler.toml)'s
+`[[kv_namespaces]]` block (replacing `REPLACE_WITH_KV_NAMESPACE_ID`), commit,
+and push. Without this, `/api/waitlist` returns a server error but the game
+itself still works — signups just won't be stored.
+
+Export collected emails any time with `npm run waitlist:export` (requires
+`wrangler login`; writes CSV to stdout).
+
+### Analytics — optional PostHog env vars
+
+Set these as Cloudflare **Build** environment variables (they're inlined at
+build time, so a Preview/Production split needs the same vars in both):
+
+| Variable | Value | Notes |
+|---|---|---|
+| `VITE_POSTHOG_KEY` | your PostHog project API key | Public/client-safe key, not a secret. Leave unset to ship with analytics disabled. |
+| `VITE_POSTHOG_HOST` | `https://us.i.posthog.com` | Or your region/self-hosted host. Optional — defaults to US cloud. |
+
+See [`.env.example`](../.env.example) for local dev.
 
 ---
 
@@ -122,3 +151,14 @@ Local preview:
 npm run build
 npm run preview
 ```
+
+To test the waitlist signup end-to-end locally (the Vite dev server on its
+own doesn't serve `/api/waitlist`), run the built app through Wrangler
+instead:
+
+```bash
+npm run worker:dev
+```
+
+This uses a local, on-disk KV namespace — no Cloudflare account needed for
+this check.

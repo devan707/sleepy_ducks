@@ -2,6 +2,7 @@
   "name": "sleepy-ducks",
   "private": true,
   "version": "1.0.0",
+  "author": "Mountain Maker Studio",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -11,6 +12,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "prepare": "git config core.hooksPath .githooks && chmod +x .githooks/commit-msg 2>/dev/null || true",
+    "typecheck:worker": "tsc --noEmit -p worker/tsconfig.json",
+    "worker:dev": "npm run build && wrangler dev",
+    "waitlist:export": "node scripts/export-waitlist.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "cap:open:ios": "npx cap open ios",
     "cap:open:android": "npx cap open android",
@@ -22,9 +26,11 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^7.0.0",
+    "@cloudflare/workers-types": "^5.20260823.1",
     "sharp": "^0.33.5",
     "typescript": "^5.7.2",
-    "vite": "^6.0.3"
+    "vite": "^6.0.3",
+    "wrangler": "^4.125.0"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
