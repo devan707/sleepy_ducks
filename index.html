@@ -104,6 +104,43 @@
         color: rgba(255, 255, 255, 0.55);
         font-weight: 600;
       }
+      .sd-waitlist-email-input {
+        display: none;
+        position: fixed;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0 12px;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: #ffffff;
+        font-family: system-ui, -apple-system, sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        outline: none;
+        pointer-events: auto;
+        touch-action: manipulation;
+        -webkit-user-select: text;
+        user-select: text;
+        z-index: 10000;
+        caret-color: #ffe566;
+      }
+      .sd-waitlist-email-input::placeholder {
+        color: rgba(255, 255, 255, 0.55);
+        font-weight: 500;
+      }
+      .sd-waitlist-email-input:disabled {
+        opacity: 0.6;
+      }
+      .sd-waitlist-honeypot {
+        position: fixed;
+        left: -9999px;
+        top: -9999px;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+      }
       .sd-install-prompt {
         position: fixed;
         left: 0;

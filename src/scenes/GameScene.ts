@@ -38,6 +38,7 @@ import { GameplayBottomToast } from '../ui/GameplayBottomToast';
 import { formatScore } from '../util/formatScore';
 import { GameEvents } from '../core/GameEvents';
 import type { GameOverData } from '../core/types';
+import { generateRunId, trackEvent } from '../analytics/analytics';
 import { burstSplash } from '../effects/ParticleEffects';
 import {
   createRunStats,
@@ -140,6 +141,7 @@ export class GameScene extends Phaser.Scene {
   private heartBalloonTimers: Phaser.Time.TimerEvent[] = [];
   private consecutiveBadTaps = 0;
   private tapInputLockedUntil = 0;
+  private runId = '';
 
   constructor() {
     super(SCENE_KEYS.game);
@@ -245,6 +247,8 @@ export class GameScene extends Phaser.Scene {
     this.badTapPendingPointerId = null;
     this.consecutiveBadTaps = 0;
     this.tapInputLockedUntil = 0;
+    this.runId = generateRunId();
+    trackEvent('level_started', { level: 1, run_id: this.runId }, { dedupeKey: this.runId });
 
     this.cameras.main.setBackgroundColor(COLORS.skyBottom);
 
@@ -1330,15 +1334,38 @@ export class GameScene extends Phaser.Scene {
         : 'passed'
       : 'failed';
 
+    const runStats = { ...this.stats };
+    const runProperties = {
+      level: 1,
+      run_id: this.runId,
+      duration_ms: runStats.timeSurvivedMs,
+      score: this.score,
+      ducks_saved: runStats.ducksSaved,
+      ducks_missed: runStats.ducksMissed,
+      longest_combo: runStats.longestCombo,
+      bad_taps: runStats.badTaps,
+      missed_taps: runStats.missedTaps,
+    };
+    if (outcome === 'failed') {
+      trackEvent('level_failed', runProperties, { dedupeKey: this.runId });
+    } else {
+      trackEvent(
+        'level_completed',
+        { ...runProperties, moonflower_collected: moonflowerCollected },
+        { dedupeKey: this.runId },
+      );
+    }
+
     return {
       score: this.score,
-      stats: { ...this.stats },
+      stats: runStats,
       isNewHighScore: false,
       isNewLongestTime: false,
       levelPassed,
       moonflowerCollected,
       outcome,
       skipEntrance,
+      runId: this.runId,
     };
   }
 

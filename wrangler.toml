@@ -1,7 +1,17 @@
 name = "sleepy-ducks"
 compatibility_date = "2024-09-23"
 pages_build_output_dir = "dist"
+main = "worker/index.ts"
 
 # Required when Cloudflare Git uses `npx wrangler deploy` (Workers static assets).
+# Requests that don't match a file here fall through to the Worker in `main`
+# (currently just POST /api/waitlist) — see worker/index.ts.
 [assets]
 directory = "./dist"
+
+# Waitlist signups (worker/index.ts). Create with:
+#   npx wrangler kv namespace create WAITLIST_KV
+# then replace the id below with the one it prints. See docs/DEPLOY.md.
+[[kv_namespaces]]
+binding = "WAITLIST_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
