@@ -4,7 +4,7 @@ Mobile-first arcade game: tap sleeping ducks before they fall into the waterfall
 
 ## Play online
 
-**https://sleepy-ducks.pages.dev**
+**https://sleepyducks.app**
 
 Friends & family beta — local high scores only, no accounts. First load may take a minute on mobile.
 

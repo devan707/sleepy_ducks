@@ -134,9 +134,9 @@ Do **not** run both Cloudflare Git builds and GitHub Actions deploy on every pus
 
 ## Live URL
 
-**https://sleepy-ducks.pages.dev**
+**https://sleepyducks.app**
 
-Update `og:url` / `og:image` in [`index.html`](../index.html) if you use a custom domain.
+This project deploys as a Cloudflare Worker (`wrangler deploy`, not `wrangler pages deploy`), so it does not automatically get a `*.pages.dev` address — the custom domain above is the real one. `og:url` / `og:image` in [`index.html`](../index.html) already point at it; update those too if the domain ever changes.
 
 ## Smoke test
 
