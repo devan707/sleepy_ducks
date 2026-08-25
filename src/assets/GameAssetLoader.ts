@@ -21,8 +21,9 @@ const progressListeners = new Set<ProgressCallback>();
 
 let loadPromise: Promise<void> | null = null;
 
-/** Clear in-flight load when GameScene shuts down so the next run can start fresh. */
+/** Drop the load handle after a successful run so the next session can retry. */
 export function resetGameAssetLoadState(): void {
+  if (!AssetManager.hasRealGameplayArt()) return;
   loadPromise = null;
   resetPoolSprayBakedLoadState();
 }
@@ -189,7 +190,8 @@ function beginLoad(scene: Phaser.Scene, onProgress?: ProgressCallback): Promise<
       queueEntry(loader, entry);
     }
 
-    if (loader.totalToLoad === 0) {
+    // totalToLoad is 0 until start() — use the pending list, or start() no-ops empty.
+    if (loader.list.size === 0) {
       onComplete();
       return;
     }

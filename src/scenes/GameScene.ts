@@ -84,6 +84,12 @@ import { DreamweedController } from '../systems/DreamweedController';
 import { SpawnController } from '../systems/SpawnController';
 
 const REOPEN_SETTINGS_AFTER_RULES = 'reopen-settings-after-rules';
+/** Treat a frame longer than this as a stall (tab resume, GPU upload, GC). */
+const HITCH_DELTA_MS = 100;
+/** Once the run is live, never simulate more than this in one step. */
+const MAX_SIM_DELTA_MS = 50;
+const STARTUP_STABLE_FRAMES = 2;
+const STARTUP_MAX_WAIT_MS = 1800;
 
 export class GameScene extends Phaser.Scene {
   private hud!: HUD;
@@ -97,6 +103,12 @@ export class GameScene extends Phaser.Scene {
   private settingsPaused = false;
   private leavingViaSettings = false;
   private viewingRulesFromSettings = false;
+  /** True after initRound finished — update must not run against half-built state. */
+  private roundReady = false;
+  /** True after hitch warmup — spawners, clocks, and duck motion may run. */
+  private simLive = false;
+  private startupStableFrames = 0;
+  private startupWaitedMs = 0;
   private stage!: WaterfallStage;
   private moonflowerController!: MoonflowerController;
   private dreamweedController!: DreamweedController;
@@ -223,7 +235,12 @@ export class GameScene extends Phaser.Scene {
     this.settingsPaused = false;
     this.leavingViaSettings = false;
     this.viewingRulesFromSettings = false;
+    this.roundReady = false;
+    this.simLive = false;
+    this.startupStableFrames = 0;
+    this.startupWaitedMs = 0;
     this.calibrationMode = false;
+    SettingsButton.resetSuppress();
     this.score = 0;
     this.lives = MAX_LIVES;
     this.goldenEggSaves = 0;
@@ -271,11 +288,8 @@ export class GameScene extends Phaser.Scene {
       mode: 'gameplay',
       onOpen: () => this.applySettingsPause(),
       onClose: () => {
-        if (this.viewingRulesFromSettings) {
-          this.applySettingsResume();
-          return;
-        }
-        if (!this.leavingViaSettings) this.applySettingsResume();
+        if (this.viewingRulesFromSettings || this.leavingViaSettings) return;
+        this.applySettingsResume();
       },
       onQuitToMenu: () => this.quitToMenu(),
       onOpenRules: () => this.openRulesFromSettings(),
@@ -375,22 +389,38 @@ export class GameScene extends Phaser.Scene {
       this.moonflowerController.setEnabled(false);
       this.dreamweedController.setEnabled(false);
       this.stage.enterLeftCliffAlignMode();
+      this.roundReady = true;
+      this.simLive = true;
     } else if (isDevMode() && isCalibrateFlowUrlParam()) {
       this.moonflowerController.setEnabled(false);
       this.dreamweedController.setEnabled(false);
       this.stage.enterFlowAlignMode();
+      this.roundReady = true;
+      this.simLive = true;
     } else if (isDevMode() && isCalibrateUrlParam()) {
       this.moonflowerController.setEnabled(false);
       this.dreamweedController.setEnabled(false);
       this.stage.enterCalibrationMode();
+      this.roundReady = true;
+      this.simLive = true;
     } else {
       ensureAppActive(this.game);
-      this.spawner.start();
-      this.dreamweedController.start();
-      this.showRunStartBanner();
-      if (isDevMode()) {
-        this.devLegend?.setVisible(false);
-      }
+      this.time.paused = true;
+      this.roundReady = true;
+    }
+  }
+
+  /** Start clocks and spawners after the first-frame GPU/load hitch has passed. */
+  private beginLiveGameplay(): void {
+    if (this.simLive) return;
+    this.simLive = true;
+    this.time.paused = false;
+    if (this.isGameOver || this.calibrationMode || this.settingsPaused) return;
+    this.spawner.start();
+    this.dreamweedController.start();
+    this.showRunStartBanner();
+    if (isDevMode()) {
+      this.devLegend?.setVisible(false);
     }
   }
 
@@ -428,19 +458,21 @@ export class GameScene extends Phaser.Scene {
     hidePlayerNameOverlay();
     this.stage.setAmbientFxPaused(false);
     AudioSession.getInstance().onSettingsOpen(false);
-    if (!this.isGameOver && !this.calibrationMode) {
+    if (!this.isGameOver && !this.calibrationMode && this.simLive) {
       this.moonflowerController?.setEnabled(true);
       this.dreamweedController?.setEnabled(true);
       this.spawner.start();
+      this.showRunStartBanner();
     }
   }
 
   private openRulesFromSettings(): void {
     this.viewingRulesFromSettings = true;
+    if (!this.settingsPaused) this.applySettingsPause();
     hidePlayerNameOverlay();
     this.settingsDrawer.close();
     this.time.delayedCall(260, () => {
-        if (this.isSceneShutDown()) return;
+      if (this.isSceneShutDown()) return;
       this.scene.launch(SCENE_KEYS.rules, { returnToGame: true });
       this.scene.bringToTop(SCENE_KEYS.rules);
     });
@@ -1023,18 +1055,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    if (this.isGameOver) return;
+    if (this.isGameOver || !this.roundReady) return;
+
+    if (!this.simLive) {
+      this.stage.update(_time, 0, 0);
+      this.startupWaitedMs += delta;
+      if (delta <= HITCH_DELTA_MS) this.startupStableFrames += 1;
+      if (
+        this.startupStableFrames >= STARTUP_STABLE_FRAMES ||
+        this.startupWaitedMs >= STARTUP_MAX_WAIT_MS
+      ) {
+        this.beginLiveGameplay();
+      }
+      return;
+    }
 
     const watchPaused = isWatchModeActive() && isWatchTimePaused();
-    const simDelta = watchPaused ? 0 : delta;
+    const frameDelta = Math.min(delta, MAX_SIM_DELTA_MS);
+    const simDelta = watchPaused ? 0 : frameDelta;
     const gameplayPaused = this.calibrationMode || watchPaused || this.settingsPaused;
 
     this.stage.update(_time, simDelta, this.difficulty.elapsedSeconds);
 
     if (!gameplayPaused) {
-      tickSurvivalTime(this.stats, delta);
+      tickSurvivalTime(this.stats, simDelta);
       this.hud.setElapsedTime(this.stats.timeSurvivedMs);
-      this.difficulty.update(delta);
+      this.difficulty.update(simDelta);
     }
 
     // Day/night music follows the HUD MM:SS clock — frozen while settings are open.
@@ -1047,18 +1093,18 @@ export class GameScene extends Phaser.Scene {
     for (const duck of children) {
       if (!duck.active) continue;
       duck.setMotionDifficulty(motion);
-      duck.updateDuck(_time, delta);
+      duck.updateDuck(_time, simDelta);
     }
 
     for (const balloon of this.activeBalloons) {
       if (balloon.active) {
-        balloon.updateBalloon(delta);
+        balloon.updateBalloon(simDelta);
       }
     }
 
     if (this.combo > 1) {
       const drainMult = this.difficulty.getComboDrainMultiplier(this.combo);
-      this.comboDrainProgress += (delta / COMBO.baseTimeoutMs) * drainMult;
+      this.comboDrainProgress += (simDelta / COMBO.baseTimeoutMs) * drainMult;
       this.hud.updateComboTimer(1 - this.comboDrainProgress);
       if (this.comboDrainProgress >= 1) {
         this.resetCombo();
@@ -1066,7 +1112,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.tryHudRunClockEvents();
-    this.dreamweedController?.update(delta);
+    this.dreamweedController?.update(simDelta);
   }
 
   /** Moonflower hint, sprout, and level pass — keyed to the HUD MM:SS timer. */
@@ -1466,6 +1512,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   shutdown(): void {
+    this.time.paused = false;
+    this.roundReady = false;
+    this.simLive = false;
     resetGameAssetLoadState();
     hidePlayerNameOverlay();
     this.cancelHeartBalloonTimers();

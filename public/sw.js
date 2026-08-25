@@ -7,6 +7,6 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
-self.addEventListener('fetch', (event) => {
-  event.respondWith(fetch(event.request));
+self.addEventListener('fetch', () => {
+  /* PWA installability only — do not proxy fetch (adds latency on every asset). */
 });

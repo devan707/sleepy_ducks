@@ -99,8 +99,17 @@ export class MenuScene extends Phaser.Scene {
     this.createLoadOverlay();
     this.setupInput();
     this.playEntrance();
+    SettingsButton.resetSuppress();
+    this.ensureBackgroundAssetLoad();
     this.gameReady = AssetManager.hasRealGameplayArt();
     this.scheduleInstallPrompt();
+  }
+
+  /** Gameplay atlases load on a persistent scene so Play cannot cancel the loader. */
+  private ensureBackgroundAssetLoad(): void {
+    if (AssetManager.hasRealGameplayArt()) return;
+    if (this.scene.isActive(SCENE_KEYS.assetLoader)) return;
+    this.scene.launch(SCENE_KEYS.assetLoader);
   }
 
   private createBackground(): void {
@@ -208,7 +217,9 @@ export class MenuScene extends Phaser.Scene {
       GAME_WIDTH / 2,
       GAME_HEIGHT - 222,
       'How to play →',
-      () => this.scene.start(SCENE_KEYS.rules),
+      () => {
+        this.scene.start(SCENE_KEYS.rules);
+      },
       DEPTH.ui,
       { fontSize: '20px', strokeThickness: 4 },
     );
@@ -225,10 +236,11 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private setupInput(): void {
-    this.input.on('pointerdown', () => {
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (SettingsButton.consumeSceneSuppress()) return;
       this.musicManager.tryUnlock();
       this.soundManager.tryUnlock();
+      if (this.input.hitTestPointer(pointer).length > 0) return;
       this.tryStartGame();
     });
   }

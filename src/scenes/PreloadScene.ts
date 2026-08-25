@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import { AssetManager } from '../assets/AssetManager';
-import { finalizeGameAssets, queueGameAssets } from '../assets/GameAssetLoader';
 import { FallbackTextures } from '../assets/FallbackTextures';
 import { MusicManager } from '../audio/MusicManager';
 import {
@@ -48,8 +47,6 @@ export class PreloadScene extends Phaser.Scene {
     for (const entry of MENU_MANIFEST) {
       this.queueEntry(entry);
     }
-
-    queueGameAssets(this.load);
   }
 
   create(): void {
@@ -65,7 +62,6 @@ export class PreloadScene extends Phaser.Scene {
       FallbackTextures.generateAll(this, menuMissing);
     }
 
-    finalizeGameAssets(this);
     AssetManager.markBootstrapped();
 
     this.loadingBar.setProgress(1);
@@ -78,6 +74,7 @@ export class PreloadScene extends Phaser.Scene {
         this.scene.start(POOL_SPRAY_BAKE_SCENE_KEY);
         return;
       }
+      this.scene.launch(SCENE_KEYS.assetLoader);
       this.scene.start(SCENE_KEYS.menu);
     });
   }

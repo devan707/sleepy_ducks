@@ -16,20 +16,18 @@ export function isWaterfallFxDisabled(): boolean {
   return cachedWaterfallFxDisabled;
 }
 
-/** Mobile pool-base FX uses tile loops instead of burst particle emitters. */
+/** Pool-base FX uses baked sprites / tile loops instead of burst particle emitters. */
 export function shouldUseBakedPoolSprayFx(): boolean {
-  return isMobileGameplayProfile() && !isWaterfallFxDisabled();
+  return !isWaterfallFxDisabled();
 }
 
-/** Lip column streak emitters — fewer on mobile, still real particles (not tiles). */
+/** Lip column streak emitters — reduced cap, still real particles (not tiles). */
 export function getFallsStreakEmitterCount(desktopCount: number): number {
-  if (!isMobileGameplayProfile()) return desktopCount;
   return Math.min(desktopCount, 6);
 }
 
 /** Micro-streaks below each rock foot. */
 export function getRockStreakEmittersPerRock(desktopCount: number): number {
-  if (!isMobileGameplayProfile()) return desktopCount;
   return Math.min(desktopCount, 2);
 }
 
@@ -47,7 +45,7 @@ export function isMobileGameplayProfile(): boolean {
   return cachedMobile;
 }
 
-/** Pool spray wave/micro-burst tuning — desktop uses gameConfig values unchanged. */
+/** Pool spray wave/micro-burst tuning — reduced budget on all devices. */
 export interface PoolSprayWaveTuning {
   burstQuantityMin: number;
   burstQuantityMax: number;
@@ -57,7 +55,7 @@ export interface PoolSprayWaveTuning {
   microBurstMaxMs: number;
   microBurstQuantityMin: number;
   microBurstQuantityMax: number;
-  /** Per burst emitter — omitted on desktop (no cap). */
+  /** Per burst emitter. */
   burstMaxParticles?: number;
 }
 
@@ -71,10 +69,6 @@ export function getPoolSprayWaveTuning(cfg: {
   microBurstQuantityMin: number;
   microBurstQuantityMax: number;
 }): PoolSprayWaveTuning {
-  if (!isMobileGameplayProfile()) {
-    return { ...cfg };
-  }
-
   return {
     burstQuantityMin: 10,
     burstQuantityMax: 20,
