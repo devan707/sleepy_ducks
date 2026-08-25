@@ -51,6 +51,11 @@ export class SettingsButton {
     return true;
   }
 
+  /** Swallow the scene-level pointerdown that follows a UI control tap. */
+  static suppressNextScenePointer(): void {
+    SettingsButton.suppressScenePointer = true;
+  }
+
   static resetSuppress(): void {
     SettingsButton.suppressScenePointer = false;
   }

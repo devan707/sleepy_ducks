@@ -47,6 +47,7 @@ export class MenuScene extends Phaser.Scene {
   private playButton!: FloatingAnimButton;
   private gameReady = false;
   private starting = false;
+  private openingRules = false;
   private installPromptUnsub: (() => void) | null = null;
   private installPromptTimer: Phaser.Time.TimerEvent | null = null;
 
@@ -56,6 +57,7 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     this.starting = false;
+    this.openingRules = false;
     ensureAppActive(this.game);
     this.cameras.main.setBackgroundColor('#1a3a4a');
     this.soundManager = SoundManager.forScene(this);
@@ -215,11 +217,9 @@ export class MenuScene extends Phaser.Scene {
     createTextLink(
       this,
       GAME_WIDTH / 2,
-      GAME_HEIGHT - 222,
+      GAME_HEIGHT - 248,
       'How to play →',
-      () => {
-        this.scene.start(SCENE_KEYS.rules);
-      },
+      () => this.openRules(),
       DEPTH.ui,
       { fontSize: '20px', strokeThickness: 4 },
     );
@@ -237,6 +237,7 @@ export class MenuScene extends Phaser.Scene {
 
   private setupInput(): void {
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.openingRules || this.starting) return;
       if (SettingsButton.consumeSceneSuppress()) return;
       this.musicManager.tryUnlock();
       this.soundManager.tryUnlock();
@@ -245,8 +246,22 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
+  private openRules(): void {
+    if (this.starting || this.openingRules) return;
+    this.openingRules = true;
+    SettingsButton.suppressNextScenePointer();
+    this.scene.start(SCENE_KEYS.rules);
+  }
+
   private tryStartGame(): void {
-    if (this.starting || this.settingsDrawer?.isOpen()) return;
+    if (
+      this.starting ||
+      this.openingRules ||
+      this.settingsDrawer?.isOpen() ||
+      this.sys.settings.status === Phaser.Scenes.SHUTDOWN
+    ) {
+      return;
+    }
     this.soundManager.tryUnlock();
 
     if (!this.gameReady) {
@@ -254,7 +269,7 @@ export class MenuScene extends Phaser.Scene {
       loadGameAssets(this).then(() => {
         this.playButton.setLoading(false);
         this.gameReady = AssetManager.hasRealGameplayArt();
-        if (this.gameReady) this.startGame();
+        if (this.gameReady && !this.openingRules) this.startGame();
       });
       return;
     }

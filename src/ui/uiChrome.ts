@@ -276,7 +276,7 @@ export function createTextLink(
   refreshUnderline();
 
   const hit = scene.add
-    .rectangle(0, 0, Math.max(text.width + 24, 120), text.height + 20, 0xffffff, 0)
+    .rectangle(0, 0, Math.max(text.width + 40, 160), text.height + 28, 0xffffff, 0)
     .setInteractive({ useHandCursor: true });
 
   const root = scene.add.container(x, y, [text, underline, hit]);
