@@ -1,12 +1,12 @@
 import type Phaser from 'phaser';
 import { gameRectToScreen } from './gameScreenCoords';
 
-/** Panel-local hit area for the settings-drawer legal row. */
+/** Panel-local hit area — sits just under Settings "How to Play". */
 export const LEGAL_LINKS_FIELD = {
   x: 24,
-  y: 656,
+  y: 624,
   width: 270,
-  height: 22,
+  height: 16,
 } as const;
 
 let root: HTMLDivElement | null = null;
@@ -29,7 +29,7 @@ function getOrCreateRoot(): HTMLDivElement {
   privacy.href = legalHref('privacy.html');
   privacy.target = '_blank';
   privacy.rel = 'noopener';
-  privacy.textContent = 'Privacy Policy';
+  privacy.textContent = 'Privacy';
 
   const sep = document.createElement('span');
   sep.textContent = '·';

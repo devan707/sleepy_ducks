@@ -53,8 +53,8 @@ const DRAWER_LAYOUT = {
   charmsHeaderY: 476,
   charmsHeaderH: 44,
   charmsGridY: 554,
-  howToPlayFooterY: 598,
-  footerY: 630,
+  howToPlayFooterY: 600,
+  footerY: 652,
 } as const;
 const SETTINGS_GOLD = 0xffe566;
 /** Settings panel shell — true blue (not pastel sky). */
@@ -461,7 +461,7 @@ export class SettingsDrawer {
       footerNodes.push(this.howToPlayLink, this.footerLink);
     } else {
       this.footerLink = this.createFooterLink(
-        DRAWER_LAYOUT.footerY,
+        DRAWER_LAYOUT.howToPlayFooterY,
         'How to Play',
         () => this.openRules(false),
         '#ffe566',
