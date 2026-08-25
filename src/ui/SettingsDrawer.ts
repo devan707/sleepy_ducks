@@ -21,6 +21,10 @@ import {
   showPlayerNameOverlay,
   syncPlayerNameOverlayValue,
 } from './playerNameOverlay';
+import {
+  hideLegalLinksOverlay,
+  showLegalLinksOverlay,
+} from './legalLinksOverlay';
 import { getDrawerLayout, DRAWER_PANEL_H, type DrawerLayout } from '../scale/displayScale';
 
 const DRAWER_W = 318;
@@ -49,8 +53,8 @@ const DRAWER_LAYOUT = {
   charmsHeaderY: 476,
   charmsHeaderH: 44,
   charmsGridY: 554,
-  howToPlayFooterY: 610,
-  footerY: 646,
+  howToPlayFooterY: 598,
+  footerY: 630,
 } as const;
 const SETTINGS_GOLD = 0xffe566;
 /** Settings panel shell — true blue (not pastel sky). */
@@ -155,6 +159,7 @@ export class SettingsDrawer {
     syncPlayerNameOverlayValue();
     this.refreshCharmsSection();
     this.repositionNameOverlay();
+    this.repositionLegalLinks();
     this.opts.onOpen?.();
     this.awaitingCloseCallback = true;
 
@@ -163,6 +168,7 @@ export class SettingsDrawer {
         this.syncPanelLayout(true);
         this.refreshCharmsSection();
         this.repositionNameOverlay();
+        this.repositionLegalLinks();
       }
     };
     this.scene.scale.on('resize', this.scaleResizeHandler);
@@ -173,8 +179,14 @@ export class SettingsDrawer {
       x: this.panelXOpen,
       duration: 280,
       ease: 'Cubic.easeOut',
-      onUpdate: () => this.repositionNameOverlay(),
-      onComplete: () => this.repositionNameOverlay(),
+      onUpdate: () => {
+        this.repositionNameOverlay();
+        this.repositionLegalLinks();
+      },
+      onComplete: () => {
+        this.repositionNameOverlay();
+        this.repositionLegalLinks();
+      },
     });
     this.backdrop.setAlpha(0);
     this.scene.tweens.add({
@@ -188,6 +200,7 @@ export class SettingsDrawer {
     if (!this.visible) return;
     this.visible = false;
     hidePlayerNameOverlay();
+    hideLegalLinksOverlay();
     this.panelSlideTween?.stop();
     this.panelSlideTween = null;
     if (this.scaleResizeHandler) {
@@ -231,6 +244,7 @@ export class SettingsDrawer {
 
   destroy(): void {
     hidePlayerNameOverlay();
+    hideLegalLinksOverlay();
     this.closeGeneration += 1;
     this.emitClose();
     this.panelSlideTween?.stop();
@@ -526,6 +540,7 @@ export class SettingsDrawer {
 
   private openRules(returnToGame: boolean): void {
     hidePlayerNameOverlay();
+    hideLegalLinksOverlay();
     if (returnToGame) {
       this.opts.onOpenRules?.();
       return;
@@ -604,6 +619,19 @@ export class SettingsDrawer {
       return;
     }
     showPlayerNameOverlay(
+      this.scene.game,
+      this.panel.x,
+      this.panel.y,
+      this.panelLayoutScale,
+    );
+  }
+
+  private repositionLegalLinks(): void {
+    if (!this.visible) {
+      hideLegalLinksOverlay();
+      return;
+    }
+    showLegalLinksOverlay(
       this.scene.game,
       this.panel.x,
       this.panel.y,
