@@ -98,3 +98,5 @@ Bug reports, ideas and pull requests are welcome. See [`CONTRIBUTING.md`](./CONT
 Code: MIT. See [`LICENSE`](./LICENSE).
 
 Art, music and sound in `public/assets/` are not open source. All rights reserved.
+
+Music made with [Suno](https://suno.com).
