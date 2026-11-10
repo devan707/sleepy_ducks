@@ -88,3 +88,13 @@ docs/           Deployment guide
 ```
 
 Future systems (progression, rewards, social, global leaderboard) can register via `GameServices` without changing core gameplay.
+
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+## License
+
+Code: MIT. See [`LICENSE`](./LICENSE).
+
+Art, music and sound in `public/assets/` are not open source. All rights reserved.
